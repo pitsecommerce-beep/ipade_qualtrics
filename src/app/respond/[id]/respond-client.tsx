@@ -81,16 +81,9 @@ export default function RespondClient() {
 
     // Fetch respondent IP
     try {
-      let ip = 'unknown';
-      try {
-        const serverResp = await fetch('/api/respond');
-        const serverData = await serverResp.json();
-        ip = serverData.ip;
-      } catch {
-        const publicResp = await fetch('https://api.ipify.org?format=json');
-        const publicData = await publicResp.json();
-        ip = publicData.ip;
-      }
+      const publicResp = await fetch('https://api.ipify.org?format=json');
+      const publicData = await publicResp.json();
+      const ip = publicData.ip;
       if (ip && ip !== 'unknown' && resp) {
         await supabase
           .from('survey_responses')
