@@ -461,7 +461,7 @@ function QuestionRenderer({
         {question.type === 'multiple_choice' && (
           <div className="space-y-2">
             {(question.options || []).map(opt => (
-              <label key={opt.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+              <label key={opt.id} onClick={() => onAnswer(opt.text)} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                 val === opt.text ? 'border-[#1B3A5C] bg-[#1B3A5C]/5' : 'border-[#E2E8F0] hover:border-[#CBD5E1]'
               }`}>
                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
@@ -576,7 +576,7 @@ function QuestionRenderer({
         {question.type === 'likert' && (
           <div className="space-y-2">
             {(question.options || []).map(opt => (
-              <label key={opt.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+              <label key={opt.id} onClick={() => onAnswer(opt.text)} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                 val === opt.text ? 'border-[#1B3A5C] bg-[#1B3A5C]/5' : 'border-[#E2E8F0] hover:border-[#CBD5E1]'
               }`}>
                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
