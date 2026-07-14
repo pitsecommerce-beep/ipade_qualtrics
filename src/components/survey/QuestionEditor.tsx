@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { GripVertical, Trash2, Copy, Settings, ChevronDown, ChevronUp, Plus, X, ToggleLeft, RefreshCw } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { GripVertical, Trash2, Copy, Settings, ChevronDown, ChevronUp, Plus, X, ToggleLeft, RefreshCw, Bold } from 'lucide-react';
 import type { Question, QuestionType, QuestionOption } from '@/types/survey';
 import { createId, createQuestion, getQuestionTypeLabel } from '@/lib/survey-utils';
 
@@ -92,6 +92,24 @@ export default function QuestionEditor({
   const updateField = <K extends keyof Question>(field: K, value: Question[K]) => {
     onChange({ ...question, [field]: value });
   };
+
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  const toggleBold = useCallback(() => {
+    const ta = textRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const text = question.text;
+    if (start === end) return;
+    const selected = text.slice(start, end);
+    if (selected.startsWith('**') && selected.endsWith('**') && selected.length > 4) {
+      const unwrapped = selected.slice(2, -2);
+      updateField('text', text.slice(0, start) + unwrapped + text.slice(end));
+    } else {
+      updateField('text', text.slice(0, start) + `**${selected}**` + text.slice(end));
+    }
+  }, [question.text, onChange]);
 
   const addOption = () => {
     const opts = [...(question.options || [])];
@@ -191,20 +209,35 @@ export default function QuestionEditor({
           </div>
 
           {/* Question Text */}
-          <textarea
-            value={question.text}
-            onChange={e => updateField('text', e.target.value)}
-            placeholder="Escribe tu pregunta aquí..."
-            className="w-full text-base font-medium text-[#1A202C] bg-transparent border-none outline-none resize-none placeholder:text-[#94A3B8]"
-            rows={2}
-          />
+          <div className="relative">
+            <textarea
+              ref={textRef}
+              value={question.text}
+              onChange={e => updateField('text', e.target.value)}
+              placeholder="Escribe tu pregunta aquí..."
+              className="w-full text-base font-medium text-[#1A202C] bg-transparent border-none outline-none resize-none placeholder:text-[#94A3B8]"
+              rows={2}
+            />
+            <div className="flex items-center gap-1 mt-1">
+              <button
+                type="button"
+                onClick={toggleBold}
+                className="p-1 rounded hover:bg-[#F0F2F5] text-[#64748B] hover:text-[#1A202C] transition-colors"
+                title="Negritas (Ctrl+B)"
+              >
+                <Bold size={14} />
+              </button>
+              <span className="text-[10px] text-[#CBD5E1] ml-1">Usa **texto** para negritas</span>
+            </div>
+          </div>
 
           {/* Description */}
-          <input
+          <textarea
             value={question.description || ''}
             onChange={e => updateField('description', e.target.value)}
-            placeholder="Descripción opcional..."
-            className="w-full text-sm text-[#64748B] bg-transparent border-none outline-none mt-1 placeholder:text-[#CBD5E1]"
+            placeholder="Descripción opcional (soporta múltiples líneas)..."
+            className="w-full text-sm text-[#64748B] bg-transparent border-none outline-none mt-1 resize-none placeholder:text-[#CBD5E1]"
+            rows={2}
           />
 
           {expanded && (

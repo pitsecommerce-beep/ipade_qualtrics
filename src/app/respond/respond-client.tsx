@@ -203,9 +203,21 @@ export default function RespondClient() {
     return Object.keys(errors).length === 0;
   };
 
+  const savePartial = async () => {
+    if (!responseId) return;
+    await supabase
+      .from('survey_responses')
+      .update({
+        answers: answers as unknown as Record<string, unknown>,
+        embedded_data: embeddedData,
+      })
+      .eq('id', responseId);
+  };
+
   const handleNext = () => {
     if (!validatePage()) return;
     if (currentPageIdx < totalPages - 1) {
+      savePartial();
       setCurrentPageIdx(currentPageIdx + 1);
       window.scrollTo(0, 0);
     }
@@ -447,11 +459,11 @@ function QuestionRenderer({
         <div className="flex items-start gap-2">
           {index !== undefined && <span className="text-sm font-semibold text-[#C4A84D]">{index}.</span>}
           <div>
-            <p className="text-base font-medium text-[#1A202C]">
-              {processedText}
+            <p className="text-base font-medium text-[#1A202C] whitespace-pre-wrap">
+              <RichText text={processedText} />
               {question.required && <span className="text-red-500 ml-1">*</span>}
             </p>
-            {processedDesc && <p className="text-sm text-[#64748B] mt-1">{processedDesc}</p>}
+            {processedDesc && <p className="text-sm text-[#64748B] mt-1 whitespace-pre-wrap"><RichText text={processedDesc} /></p>}
           </div>
         </div>
       </div>
@@ -767,5 +779,19 @@ function QuestionRenderer({
 
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
     </div>
+  );
+}
+
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
   );
 }
