@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Download, RefreshCw, Users, Clock, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Users, Clock, CheckCircle, Trash2 } from 'lucide-react';
 import type { Survey, SurveyResponse, QuestionType } from '@/types/survey';
 
 export default function ResultsClient() {
@@ -17,6 +17,7 @@ export default function ResultsClient() {
   const [responses, setResponses] = useState<SurveyResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'summary' | 'individual'>('summary');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/');
@@ -36,6 +37,16 @@ export default function ResultsClient() {
     if (surveyRes.data) setSurvey(surveyRes.data as unknown as Survey);
     if (responsesRes.data) setResponses(responsesRes.data as unknown as SurveyResponse[]);
     setLoading(false);
+  };
+
+  const deleteResponse = async (responseId: string) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar esta respuesta? Esta acción no se puede deshacer.')) return;
+    setDeletingId(responseId);
+    const { error } = await supabase.from('survey_responses').delete().eq('id', responseId);
+    if (!error) {
+      setResponses(prev => prev.filter(r => r.id !== responseId));
+    }
+    setDeletingId(null);
   };
 
   const exportCSV = () => {
@@ -341,7 +352,17 @@ export default function ResultsClient() {
                       </p>
                     </div>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-[#94A3B8] group-open:rotate-180 transition-transform" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.preventDefault(); deleteResponse(resp.id); }}
+                      disabled={deletingId === resp.id}
+                      className="p-1.5 rounded-lg text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
+                      title="Eliminar respuesta"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    <ChevronDown className="w-4 h-4 text-[#94A3B8] group-open:rotate-180 transition-transform" />
+                  </div>
                 </summary>
                 <div className="mt-4 pt-4 border-t border-[#F1F5F9] space-y-3">
                   {allQuestions.map(q => {
