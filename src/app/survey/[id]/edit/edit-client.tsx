@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { ArrowLeft, Save, Eye, Play, Square, Settings, LayoutList, GitBranch as FlowIcon, BarChart3, Share2, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Eye, Play, Square, Settings, LayoutList, GitBranch as FlowIcon, BarChart3, Share2, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Survey, Block, Question, QuestionType } from '@/types/survey';
 import { createBlock, createQuestion, createId, getQuestionTypeLabel } from '@/lib/survey-utils';
@@ -45,6 +45,7 @@ export default function EditClient() {
   const [selectedBlockIdx, setSelectedBlockIdx] = useState(0);
   const [showAddQuestion, setShowAddQuestion] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [confirmDeleteBlockIdx, setConfirmDeleteBlockIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/');
@@ -326,7 +327,7 @@ export default function EditClient() {
                       </div>
                       {survey.blocks.length > 1 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteBlock(idx); }}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteBlockIdx(idx); }}
                           className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${
                             selectedBlockIdx === idx ? 'hover:bg-white/20 text-white/60' : 'hover:bg-red-50 text-red-400'
                           }`}
@@ -633,6 +634,35 @@ export default function EditClient() {
           </main>
         )}
       </div>
+
+      {confirmDeleteBlockIdx !== null && survey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDeleteBlockIdx(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-[#1A202C]">Eliminar bloque</h3>
+                <p className="text-sm text-[#64748B]">
+                  Se eliminará &quot;{survey.blocks[confirmDeleteBlockIdx]?.name}&quot; con {survey.blocks[confirmDeleteBlockIdx]?.questions.length || 0} pregunta(s). Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setConfirmDeleteBlockIdx(null)} className="btn-secondary text-sm py-2 px-4">
+                Cancelar
+              </button>
+              <button
+                onClick={() => { deleteBlock(confirmDeleteBlockIdx); setConfirmDeleteBlockIdx(null); }}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
