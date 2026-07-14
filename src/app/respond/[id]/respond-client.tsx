@@ -24,7 +24,7 @@ export default function RespondClient() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    loadSurvey();
+    if (surveyId) loadSurvey();
   }, [surveyId]);
 
   const loadSurvey = async () => {

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import SurveyRedirect from './survey-redirect';
 
 export const dynamic = 'force-static';
@@ -8,5 +9,9 @@ export function generateStaticParams() {
 }
 
 export default function SurveyPage() {
-  return <SurveyRedirect />;
+  return (
+    <Suspense>
+      <SurveyRedirect />
+    </Suspense>
+  );
 }
