@@ -223,16 +223,16 @@ export default function EditClient() {
       {/* Top Bar */}
       <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-40">
         <div className="px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg hover:bg-[#F0F2F5] text-[#64748B]">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg hover:bg-[#F0F2F5] text-[#64748B] shrink-0">
               <ArrowLeft size={18} />
             </button>
-            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png" alt="IPADE" className="h-7 w-auto" />
-            <div className="border-l border-[#E2E8F0] pl-3 ml-1">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png" alt="IPADE" className="h-7 w-auto shrink-0" />
+            <div className="border-l border-[#E2E8F0] pl-3 ml-1 flex-1 min-w-0">
               <input
                 value={survey.title}
                 onChange={e => updateSurvey({ title: e.target.value })}
-                className="text-sm font-semibold text-[#1A202C] bg-transparent border-none outline-none w-64"
+                className="text-sm font-semibold text-[#1A202C] bg-transparent border-none outline-none w-full"
               />
             </div>
             <span className={`badge ${survey.status === 'active' ? 'badge-active' : survey.status === 'closed' ? 'badge-closed' : 'badge-draft'}`}>
