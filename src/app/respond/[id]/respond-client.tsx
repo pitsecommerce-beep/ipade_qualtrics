@@ -341,27 +341,55 @@ export default function RespondClient() {
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-8">
-        {/* Block title */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-[#1B3A5C]">{currentBlock.name}</h2>
-          {currentBlock.description && <p className="text-sm text-[#64748B] mt-1">{currentBlock.description}</p>}
-        </div>
+        {currentBlock.type === 'welcome' ? (
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+            {currentBlock.showLogo !== false && (
+              <div className="flex justify-center pt-8 pb-2">
+                <img
+                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png"
+                  alt="IPADE Business School"
+                  className="h-20 w-auto"
+                />
+              </div>
+            )}
+            <div className="px-8 pb-8 pt-4">
+              <h2 className="text-xl font-bold text-[#1B3A5C] font-[Georgia] text-center mb-4">{currentBlock.name}</h2>
+              {currentBlock.welcomeContent && (
+                <div
+                  className="prose prose-sm max-w-none text-[#1A202C]"
+                  dangerouslySetInnerHTML={{ __html: currentBlock.welcomeContent }}
+                />
+              )}
+              {!currentBlock.welcomeContent && currentBlock.description && (
+                <p className="text-sm text-[#64748B] text-center">{currentBlock.description}</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Block title */}
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-[#1B3A5C]">{currentBlock.name}</h2>
+              {currentBlock.description && <p className="text-sm text-[#64748B] mt-1">{currentBlock.description}</p>}
+            </div>
 
-        {/* Questions */}
-        <div className="space-y-6">
-          {visibleQuestions.map((question, qIdx) => (
-            <QuestionRenderer
-              key={question.id}
-              question={question}
-              index={survey.settings.showQuestionNumbers ? qIdx + 1 : undefined}
-              answer={answers[question.id]}
-              onAnswer={(value) => setAnswer(question.id, question, value)}
-              error={validationErrors[question.id]}
-              answers={answers}
-              embeddedData={embeddedData}
-            />
-          ))}
-        </div>
+            {/* Questions */}
+            <div className="space-y-6">
+              {visibleQuestions.map((question, qIdx) => (
+                <QuestionRenderer
+                  key={question.id}
+                  question={question}
+                  index={survey.settings.showQuestionNumbers ? qIdx + 1 : undefined}
+                  answer={answers[question.id]}
+                  onAnswer={(value) => setAnswer(question.id, question, value)}
+                  error={validationErrors[question.id]}
+                  answers={answers}
+                  embeddedData={embeddedData}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {validationErrors._form && (
           <div className="mt-4 bg-red-50 text-red-700 text-sm p-3 rounded-lg border border-red-200">

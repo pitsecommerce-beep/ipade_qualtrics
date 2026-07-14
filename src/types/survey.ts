@@ -79,6 +79,9 @@ export interface Block {
   id: string;
   name: string;
   description?: string;
+  type?: 'standard' | 'welcome';
+  welcomeContent?: string;
+  showLogo?: boolean;
   questions: Question[];
   randomizeQuestions?: boolean;
 }
