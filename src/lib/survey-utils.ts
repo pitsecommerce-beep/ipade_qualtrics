@@ -243,7 +243,12 @@ export function evaluateDisplayLogic(
 }
 
 export function createDefaultSurvey(ownerId: string): Omit<Survey, 'id' | 'created_at' | 'updated_at'> {
-  const welcomeBlock = createBlock('Bienvenida');
+  const welcomeBlock: Block = {
+    ...createBlock('Bienvenida'),
+    type: 'welcome',
+    showLogo: true,
+    welcomeContent: '<p>Bienvenido/a a esta encuesta. Tu participación es muy importante para nosotros.</p><p>Por favor, responde con honestidad. Tus respuestas serán tratadas de manera confidencial.</p>',
+  };
   const mainBlock = createBlock('Preguntas Principales');
 
   return {

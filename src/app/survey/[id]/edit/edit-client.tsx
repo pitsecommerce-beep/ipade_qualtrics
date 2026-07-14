@@ -10,6 +10,7 @@ import type { Survey, Block, Question, QuestionType } from '@/types/survey';
 import { createBlock, createQuestion, createId, getQuestionTypeLabel } from '@/lib/survey-utils';
 import QuestionEditor from '@/components/survey/QuestionEditor';
 import FlowEditor from '@/components/survey/FlowEditor';
+import RichTextEditor from '@/components/survey/RichTextEditor';
 
 type Tab = 'builder' | 'flow' | 'settings' | 'preview';
 
@@ -316,7 +317,7 @@ export default function EditClient() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{block.name}</p>
                         <p className={`text-xs mt-0.5 ${selectedBlockIdx === idx ? 'text-white/60' : 'text-[#94A3B8]'}`}>
-                          {block.questions.length} pregunta{block.questions.length !== 1 ? 's' : ''}
+                          {block.type === 'welcome' ? 'Página de inicio' : `${block.questions.length} pregunta${block.questions.length !== 1 ? 's' : ''}`}
                         </p>
                       </div>
                       {survey.blocks.length > 1 && (
@@ -338,83 +339,161 @@ export default function EditClient() {
             {/* Main Content */}
             <main className="flex-1 overflow-y-auto">
               <div className="max-w-3xl mx-auto py-6 px-6">
-                {/* Block Header */}
-                <div className="mb-6 flex items-center justify-between">
-                  <div className="flex-1">
-                    <input
-                      value={currentBlock.name}
-                      onChange={e => updateBlock(selectedBlockIdx, { name: e.target.value })}
-                      className="text-xl font-bold text-[#1B3A5C] bg-transparent border-none outline-none font-[Georgia] w-full"
-                    />
-                    <input
-                      value={currentBlock.description || ''}
-                      onChange={e => updateBlock(selectedBlockIdx, { description: e.target.value })}
-                      placeholder="Descripción del bloque (opcional)"
-                      className="text-sm text-[#64748B] bg-transparent border-none outline-none w-full mt-1 placeholder:text-[#CBD5E1]"
-                    />
-                  </div>
-                  <label className="flex items-center gap-2 text-xs text-[#64748B] bg-[#F8F9FB] px-3 py-1.5 rounded-lg border border-[#E2E8F0]">
-                    <input
-                      type="checkbox"
-                      checked={currentBlock.randomizeQuestions || false}
-                      onChange={e => updateBlock(selectedBlockIdx, { randomizeQuestions: e.target.checked })}
-                      className="rounded border-[#CBD5E1] w-3.5 h-3.5"
-                    />
-                    Aleatorizar preguntas
-                  </label>
-                </div>
+                {currentBlock.type === 'welcome' ? (
+                  <>
+                    {/* Welcome Block Editor */}
+                    <div className="mb-6">
+                      <input
+                        value={currentBlock.name}
+                        onChange={e => updateBlock(selectedBlockIdx, { name: e.target.value })}
+                        className="text-xl font-bold text-[#1B3A5C] bg-transparent border-none outline-none font-[Georgia] w-full"
+                      />
+                    </div>
 
-                {/* Questions */}
-                <div className="space-y-4">
-                  {currentBlock.questions.map((question, qIdx) => (
-                    <QuestionEditor
-                      key={question.id}
-                      question={question}
-                      index={qIdx}
-                      onChange={(q) => updateQuestion(qIdx, q)}
-                      onDelete={() => deleteQuestion(qIdx)}
-                      onDuplicate={() => duplicateQuestion(qIdx)}
-                      allQuestions={allQuestions}
-                    />
-                  ))}
-                </div>
-
-                {/* Add Question */}
-                <div className="mt-6 relative">
-                  <button
-                    onClick={() => setShowAddQuestion(!showAddQuestion)}
-                    className="btn-secondary w-full justify-center py-3 border-dashed border-2"
-                  >
-                    <Plus size={18} /> Agregar Pregunta
-                  </button>
-
-                  {showAddQuestion && (
-                    <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-[#E2E8F0] p-4 z-20 animate-fade-in">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold text-[#1B3A5C]">Tipo de Pregunta</h4>
-                        <button onClick={() => setShowAddQuestion(false)} className="text-[#94A3B8] hover:text-[#64748B]">
-                          <span className="text-lg">&times;</span>
-                        </button>
-                      </div>
-                      {['Básicas', 'Escalas', 'Avanzadas'].map(category => (
-                        <div key={category} className="mb-3">
-                          <p className="text-xs font-medium text-[#94A3B8] uppercase tracking-wider mb-2">{category}</p>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {QUESTION_TYPES.filter(q => q.category === category).map(qt => (
-                              <button
-                                key={qt.type}
-                                onClick={() => addQuestion(qt.type)}
-                                className="text-left px-3 py-2 rounded-lg hover:bg-[#F0F2F5] text-sm text-[#1A202C] transition-colors border border-transparent hover:border-[#E2E8F0]"
-                              >
-                                {qt.label}
-                              </button>
-                            ))}
+                    {/* Logo Toggle */}
+                    <div className="card mb-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png"
+                            alt="IPADE"
+                            className="h-12 w-auto"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-[#1B3A5C]">Logo IPADE Business School</p>
+                            <p className="text-xs text-[#94A3B8]">Se mostrará al inicio de la encuesta</p>
                           </div>
                         </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={currentBlock.showLogo !== false}
+                            onChange={e => updateBlock(selectedBlockIdx, { showLogo: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-10 h-5 bg-[#E2E8F0] peer-checked:bg-[#1B3A5C] rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-5" />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Rich Text Content */}
+                    <div className="card">
+                      <label className="block text-sm font-semibold text-[#1B3A5C] mb-3">Mensaje de Bienvenida e Instrucciones</label>
+                      <RichTextEditor
+                        value={currentBlock.welcomeContent || ''}
+                        onChange={html => updateBlock(selectedBlockIdx, { welcomeContent: html })}
+                        placeholder="Escribe el mensaje de bienvenida e instrucciones para los encuestados..."
+                      />
+                    </div>
+
+                    {/* Preview */}
+                    <div className="mt-8">
+                      <p className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wider mb-3">Vista previa</p>
+                      <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden shadow-sm">
+                        <div className="bg-gradient-to-r from-[#0F2440] to-[#1B3A5C] px-8 py-8 text-white">
+                          {currentBlock.showLogo !== false && (
+                            <div className="flex items-center gap-3 mb-4">
+                              <img
+                                src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png"
+                                alt="IPADE"
+                                className="h-10 w-auto"
+                              />
+                              <span className="text-sm font-medium text-white/70">IPADE Business School</span>
+                            </div>
+                          )}
+                          <h2 className="text-2xl font-bold font-[Georgia]">{survey.title}</h2>
+                          {survey.description && <p className="text-sm text-white/80 mt-1">{survey.description}</p>}
+                        </div>
+                        <div className="px-8 py-6">
+                          <div
+                            className="prose prose-sm max-w-none text-[#1A202C]"
+                            dangerouslySetInnerHTML={{ __html: currentBlock.welcomeContent || '<p class="text-[#94A3B8]">El mensaje de bienvenida aparecerá aquí...</p>' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Standard Block Editor */}
+                    <div className="mb-6 flex items-center justify-between">
+                      <div className="flex-1">
+                        <input
+                          value={currentBlock.name}
+                          onChange={e => updateBlock(selectedBlockIdx, { name: e.target.value })}
+                          className="text-xl font-bold text-[#1B3A5C] bg-transparent border-none outline-none font-[Georgia] w-full"
+                        />
+                        <input
+                          value={currentBlock.description || ''}
+                          onChange={e => updateBlock(selectedBlockIdx, { description: e.target.value })}
+                          placeholder="Descripción del bloque (opcional)"
+                          className="text-sm text-[#64748B] bg-transparent border-none outline-none w-full mt-1 placeholder:text-[#CBD5E1]"
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-[#64748B] bg-[#F8F9FB] px-3 py-1.5 rounded-lg border border-[#E2E8F0]">
+                        <input
+                          type="checkbox"
+                          checked={currentBlock.randomizeQuestions || false}
+                          onChange={e => updateBlock(selectedBlockIdx, { randomizeQuestions: e.target.checked })}
+                          className="rounded border-[#CBD5E1] w-3.5 h-3.5"
+                        />
+                        Aleatorizar preguntas
+                      </label>
+                    </div>
+
+                    {/* Questions */}
+                    <div className="space-y-4">
+                      {currentBlock.questions.map((question, qIdx) => (
+                        <QuestionEditor
+                          key={question.id}
+                          question={question}
+                          index={qIdx}
+                          onChange={(q) => updateQuestion(qIdx, q)}
+                          onDelete={() => deleteQuestion(qIdx)}
+                          onDuplicate={() => duplicateQuestion(qIdx)}
+                          allQuestions={allQuestions}
+                        />
                       ))}
                     </div>
-                  )}
-                </div>
+
+                    {/* Add Question */}
+                    <div className="mt-6 relative">
+                      <button
+                        onClick={() => setShowAddQuestion(!showAddQuestion)}
+                        className="btn-secondary w-full justify-center py-3 border-dashed border-2"
+                      >
+                        <Plus size={18} /> Agregar Pregunta
+                      </button>
+
+                      {showAddQuestion && (
+                        <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-[#E2E8F0] p-4 z-20 animate-fade-in">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-semibold text-[#1B3A5C]">Tipo de Pregunta</h4>
+                            <button onClick={() => setShowAddQuestion(false)} className="text-[#94A3B8] hover:text-[#64748B]">
+                              <span className="text-lg">&times;</span>
+                            </button>
+                          </div>
+                          {['Básicas', 'Escalas', 'Avanzadas'].map(category => (
+                            <div key={category} className="mb-3">
+                              <p className="text-xs font-medium text-[#94A3B8] uppercase tracking-wider mb-2">{category}</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {QUESTION_TYPES.filter(q => q.category === category).map(qt => (
+                                  <button
+                                    key={qt.type}
+                                    onClick={() => addQuestion(qt.type)}
+                                    className="text-left px-3 py-2 rounded-lg hover:bg-[#F0F2F5] text-sm text-[#1A202C] transition-colors border border-transparent hover:border-[#E2E8F0]"
+                                  >
+                                    {qt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </main>
           </>
