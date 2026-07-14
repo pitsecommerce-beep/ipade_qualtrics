@@ -3,7 +3,7 @@
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { ArrowLeft, Save, Eye, Play, Square, Settings, LayoutList, GitBranch as FlowIcon, BarChart3, Share2, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Survey, Block, Question, QuestionType } from '@/types/survey';
@@ -70,8 +70,12 @@ export default function EditClient() {
     setLoading(false);
   };
 
-  const saveSurvey = useCallback(async () => {
-    if (!survey || saving) return;
+  const savingRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveSurvey = useCallback(async (silent = false) => {
+    if (!survey || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
 
     const { error } = await supabase
@@ -87,13 +91,35 @@ export default function EditClient() {
       .eq('id', survey.id);
 
     if (error) {
-      toast.error('Error al guardar');
+      if (!silent) toast.error('Error al guardar');
     } else {
-      toast.success('Guardado');
+      if (!silent) toast.success('Guardado');
       setHasChanges(false);
     }
+    savingRef.current = false;
     setSaving(false);
-  }, [survey, saving]);
+  }, [survey]);
+
+  useEffect(() => {
+    if (!hasChanges || !survey) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveSurvey(true);
+    }, 2000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [hasChanges, survey, saveSurvey]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChanges) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasChanges]);
 
   const updateSurvey = (updates: Partial<Survey>) => {
     if (!survey) return;
@@ -222,7 +248,7 @@ export default function EditClient() {
             }`}>
               {survey.status === 'active' ? <><Square size={14} /> Cerrar</> : <><Play size={14} /> Activar</>}
             </button>
-            <button onClick={saveSurvey} disabled={saving || !hasChanges} className="btn-primary text-xs py-1.5 px-4 disabled:opacity-40">
+            <button onClick={() => saveSurvey(false)} disabled={saving || !hasChanges} className="btn-primary text-xs py-1.5 px-4 disabled:opacity-40">
               {saving ? <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" /> : <Save size={14} />}
               Guardar
             </button>
