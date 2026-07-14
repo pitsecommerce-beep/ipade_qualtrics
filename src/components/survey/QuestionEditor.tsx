@@ -1,9 +1,32 @@
 'use client';
 
 import { useState } from 'react';
-import { GripVertical, Trash2, Copy, Settings, ChevronDown, ChevronUp, Plus, X, ToggleLeft } from 'lucide-react';
+import { GripVertical, Trash2, Copy, Settings, ChevronDown, ChevronUp, Plus, X, ToggleLeft, RefreshCw } from 'lucide-react';
 import type { Question, QuestionType, QuestionOption } from '@/types/survey';
-import { createId, getQuestionTypeLabel } from '@/lib/survey-utils';
+import { createId, createQuestion, getQuestionTypeLabel } from '@/lib/survey-utils';
+
+const OPTION_BASED_TYPES: QuestionType[] = [
+  'multiple_choice', 'multi_select', 'dropdown', 'rank_order', 'constant_sum', 'image_choice', 'group_rank', 'likert',
+];
+const TEXT_BASED_TYPES: QuestionType[] = ['text_entry', 'essay'];
+
+const ALL_TYPES: { type: QuestionType; label: string; category: string }[] = [
+  { type: 'multiple_choice', label: 'Opcion Multiple', category: 'Basicas' },
+  { type: 'multi_select', label: 'Seleccion Multiple', category: 'Basicas' },
+  { type: 'text_entry', label: 'Entrada de Texto', category: 'Basicas' },
+  { type: 'essay', label: 'Texto Largo', category: 'Basicas' },
+  { type: 'dropdown', label: 'Menu Desplegable', category: 'Basicas' },
+  { type: 'yes_no', label: 'Si / No', category: 'Basicas' },
+  { type: 'likert', label: 'Escala Likert', category: 'Escalas' },
+  { type: 'slider', label: 'Deslizador', category: 'Escalas' },
+  { type: 'nps', label: 'Net Promoter Score', category: 'Escalas' },
+  { type: 'matrix', label: 'Matriz / Tabla', category: 'Avanzadas' },
+  { type: 'rank_order', label: 'Ordenar por Rango', category: 'Avanzadas' },
+  { type: 'constant_sum', label: 'Suma Constante', category: 'Avanzadas' },
+  { type: 'date', label: 'Fecha', category: 'Avanzadas' },
+  { type: 'file_upload', label: 'Subir Archivo', category: 'Avanzadas' },
+  { type: 'image_choice', label: 'Seleccion con Imagen', category: 'Avanzadas' },
+];
 
 interface QuestionEditorProps {
   question: Question;
@@ -20,6 +43,51 @@ export default function QuestionEditor({
   const [expanded, setExpanded] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showLogic, setShowLogic] = useState(false);
+  const [showTypeChanger, setShowTypeChanger] = useState(false);
+
+  const changeType = (newType: QuestionType) => {
+    if (newType === question.type) {
+      setShowTypeChanger(false);
+      return;
+    }
+
+    const defaults = createQuestion(newType);
+    const updated: Question = {
+      ...defaults,
+      id: question.id,
+      text: question.text,
+      description: question.description,
+      required: question.required,
+      displayLogic: question.displayLogic,
+      randomizeOptions: question.randomizeOptions,
+      allowOther: question.allowOther,
+    };
+
+    const oldIsOptionBased = OPTION_BASED_TYPES.includes(question.type) || question.type === 'yes_no';
+    const newIsOptionBased = OPTION_BASED_TYPES.includes(newType) || newType === 'yes_no';
+    if (oldIsOptionBased && newIsOptionBased && question.options) {
+      updated.options = question.options;
+    }
+
+    const oldIsTextBased = TEXT_BASED_TYPES.includes(question.type);
+    const newIsTextBased = TEXT_BASED_TYPES.includes(newType);
+    if (oldIsTextBased && newIsTextBased) {
+      updated.placeholder = question.placeholder;
+      updated.maxLength = question.maxLength;
+    }
+
+    if (question.type === 'slider' && newType === 'nps') {
+      updated.npsLeftLabel = question.sliderMinLabel;
+      updated.npsRightLabel = question.sliderMaxLabel;
+    }
+    if (question.type === 'nps' && newType === 'slider') {
+      updated.sliderMinLabel = question.npsLeftLabel;
+      updated.sliderMaxLabel = question.npsRightLabel;
+    }
+
+    onChange(updated);
+    setShowTypeChanger(false);
+  };
 
   const updateField = <K extends keyof Question>(field: K, value: Question[K]) => {
     onChange({ ...question, [field]: value });
@@ -68,13 +136,43 @@ export default function QuestionEditor({
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative">
               <span className="text-xs font-semibold text-[#C4A84D] bg-[#C4A84D]/10 px-2 py-0.5 rounded">
                 P{index + 1}
               </span>
-              <span className="text-xs text-[#64748B]">
+              <button
+                onClick={() => setShowTypeChanger(!showTypeChanger)}
+                className="text-xs text-[#64748B] hover:text-[#1B3A5C] flex items-center gap-1 px-2 py-0.5 rounded hover:bg-[#F0F2F5] transition-colors"
+              >
                 {getQuestionTypeLabel(question.type)}
-              </span>
+                <ChevronDown size={12} />
+              </button>
+              {showTypeChanger && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowTypeChanger(false)} />
+                  <div className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 w-56 z-40 animate-fade-in max-h-72 overflow-y-auto">
+                    {(['Basicas', 'Escalas', 'Avanzadas'] as const).map(cat => (
+                      <div key={cat}>
+                        <p className="text-[10px] font-semibold text-[#94A3B8] uppercase px-3 pt-2 pb-1">{cat}</p>
+                        {ALL_TYPES.filter(t => t.category === cat).map(t => (
+                          <button
+                            key={t.type}
+                            onClick={() => changeType(t.type)}
+                            className={`w-full px-3 py-1.5 text-xs text-left flex items-center justify-between ${
+                              t.type === question.type
+                                ? 'bg-[#1B3A5C]/5 text-[#1B3A5C] font-medium'
+                                : 'text-[#1A202C] hover:bg-[#F8F9FB]'
+                            }`}
+                          >
+                            {t.label}
+                            {t.type === question.type && <span className="text-[10px] text-[#2A5A8C]">actual</span>}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={onDuplicate} className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B]" title="Duplicar">
