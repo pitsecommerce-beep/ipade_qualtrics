@@ -45,7 +45,7 @@ export default function DistributeClient() {
     if (typeof window === 'undefined') return '';
     const pathIdx = window.location.pathname.indexOf('/survey/');
     const basePath = pathIdx > 0 ? window.location.pathname.substring(0, pathIdx) : '';
-    return `${window.location.origin}${basePath}/respond/_/?surveyId=${surveyId}`;
+    return `${window.location.origin}${basePath}/respond/?surveyId=${surveyId}`;
   })();
 
   const copyLink = () => {
