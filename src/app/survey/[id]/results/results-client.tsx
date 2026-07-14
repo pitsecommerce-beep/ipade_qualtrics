@@ -42,7 +42,26 @@ export default function ResultsClient() {
     if (!survey || responses.length === 0) return;
 
     const allQuestions = survey.blocks.flatMap(b => b.questions);
-    const headers = ['ID Respuesta', 'IP', 'Inicio', 'Completado', ...allQuestions.map(q => q.text || q.id)];
+
+    const collectEmbeddedFields = (elements: typeof survey.flow): string[] => {
+      const names: string[] = [];
+      for (const el of elements) {
+        if (el.type === 'embedded_data' && el.embeddedData) {
+          for (const f of el.embeddedData) {
+            if (f.name && !names.includes(f.name)) names.push(f.name);
+          }
+        }
+        if (el.children) names.push(...collectEmbeddedFields(el.children).filter(n => !names.includes(n)));
+      }
+      return names;
+    };
+    const embeddedFieldNames = collectEmbeddedFields(survey.flow);
+
+    const headers = [
+      'ID Respuesta', 'IP', 'Inicio', 'Completado',
+      ...embeddedFieldNames.map(n => `[Variable] ${n}`),
+      ...allQuestions.map(q => q.text || q.id),
+    ];
 
     const rows = responses.map(r => {
       const row: string[] = [
@@ -51,6 +70,9 @@ export default function ResultsClient() {
         r.started_at,
         r.completed_at || '',
       ];
+      for (const fieldName of embeddedFieldNames) {
+        row.push(r.embedded_data?.[fieldName] || '');
+      }
       for (const q of allQuestions) {
         const answer = r.answers[q.id];
         if (!answer) {
@@ -66,7 +88,8 @@ export default function ResultsClient() {
       return row;
     });
 
-    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(','))].join('\n');
+    const quoteCsvField = (v: string) => `"${v.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '')}"`;
+    const csv = [headers.map(quoteCsvField).join(','), ...rows.map(r => r.map(quoteCsvField).join(','))].join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
