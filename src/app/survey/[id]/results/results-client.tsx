@@ -73,9 +73,20 @@ export default function ResultsClient() {
     };
     const embeddedFieldNames = collectEmbeddedFields(survey.flow);
 
+    const randomizerKeys = new Set<string>();
+    for (const r of responses) {
+      if (r.embedded_data) {
+        for (const key of Object.keys(r.embedded_data)) {
+          if (key.startsWith('__randomizer_')) randomizerKeys.add(key);
+        }
+      }
+    }
+    const sortedRandomizerKeys = [...randomizerKeys].sort();
+
     const headers = [
       'ID Respuesta', 'IP', 'Inicio', 'Completado', 'Estado',
       ...embeddedFieldNames.map(n => `[Variable] ${n}`),
+      ...sortedRandomizerKeys.map(k => `[Orden] Aleatorizador ${k.replace('__randomizer_', '').replace('_orden', '')}`),
       ...allQuestions.map(q => q.text || q.id),
     ];
 
@@ -89,6 +100,9 @@ export default function ResultsClient() {
       ];
       for (const fieldName of embeddedFieldNames) {
         row.push(r.embedded_data?.[fieldName] || '');
+      }
+      for (const key of sortedRandomizerKeys) {
+        row.push(r.embedded_data?.[key] || '');
       }
       for (const q of allQuestions) {
         const answer = r.answers[q.id];
