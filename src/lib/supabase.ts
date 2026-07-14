@@ -5,14 +5,17 @@ let _supabase: SupabaseClient | null = null;
 function getClient(): SupabaseClient {
   if (_supabase) return _supabase;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
-    console.warn('[supabase] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY not set — using placeholder');
+    throw new Error(
+      '[supabase] NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set. ' +
+      'Add them to .env.local for local dev or as GitHub Actions secrets for CI builds.'
+    );
   }
 
-  _supabase = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder');
+  _supabase = createClient(url, key);
   return _supabase;
 }
 
