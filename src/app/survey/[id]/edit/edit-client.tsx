@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Save, Eye, Play, Square, Settings, LayoutList, GitBranch as FlowIcon, BarChart3, Share2, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -34,8 +34,8 @@ const QUESTION_TYPES: { type: QuestionType; label: string; category: string }[] 
 export default function EditClient() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const params = useParams();
-  const surveyId = params.id as string;
+  const searchParams = useSearchParams();
+  const surveyId = searchParams.get('surveyId') || '';
 
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [loading, setLoading] = useState(true);
@@ -214,7 +214,7 @@ export default function EditClient() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={() => window.open(`/respond/${survey.id}/`, '_blank')} className="btn-secondary text-xs py-1.5 px-3">
+            <button onClick={() => window.open(`/respond/_/?surveyId=${survey.id}`, '_blank')} className="btn-secondary text-xs py-1.5 px-3">
               <Eye size={14} /> Vista Previa
             </button>
             <button onClick={toggleStatus} className={`text-xs py-1.5 px-3 rounded-lg font-medium flex items-center gap-1.5 ${
@@ -249,13 +249,13 @@ export default function EditClient() {
             </button>
           ))}
           <button
-            onClick={() => router.push(`/survey/${survey.id}/distribute/`)}
+            onClick={() => router.push(`/survey/_/distribute?surveyId=${survey.id}`)}
             className="px-4 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 border-transparent text-[#64748B] hover:text-[#1B3A5C] transition-colors"
           >
             <Share2 size={15} /> Distribuir
           </button>
           <button
-            onClick={() => router.push(`/survey/${survey.id}/results/`)}
+            onClick={() => router.push(`/survey/_/results?surveyId=${survey.id}`)}
             className="px-4 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 border-transparent text-[#64748B] hover:text-[#1B3A5C] transition-colors"
           >
             <BarChart3 size={15} /> Resultados
