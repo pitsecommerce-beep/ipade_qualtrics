@@ -95,6 +95,7 @@ export default function RespondClient() {
   const buildBlocks = (s: Survey) => {
     const embData: Record<string, string> = {};
     const orderedBlockIds: string[] = [];
+    let randomizerIdx = 0;
 
     const resolveField = (field: { name: string; value: string; values?: string[]; randomize?: boolean }) => {
       if (field.randomize && field.values && field.values.length > 0) {
@@ -104,6 +105,8 @@ export default function RespondClient() {
       }
     };
 
+    const getBlockName = (blockId: string) => s.blocks.find(b => b.id === blockId)?.name || blockId;
+
     for (const element of s.flow) {
       if (element.type === 'embedded_data' && element.embeddedData) {
         for (const field of element.embeddedData) resolveField(field);
@@ -112,15 +115,22 @@ export default function RespondClient() {
         orderedBlockIds.push(element.blockId);
       }
       if (element.type === 'randomizer' && element.children) {
+        randomizerIdx++;
         const shuffled = shuffleArray(element.children);
         const count = element.randomizerCount || shuffled.length;
-        for (const child of shuffled.slice(0, count)) {
+        const shown = shuffled.slice(0, count);
+        const blockNames: string[] = [];
+        for (const child of shown) {
           if (child.type === 'embedded_data' && child.embeddedData) {
             for (const field of child.embeddedData) resolveField(field);
           }
           if (child.type === 'show_block' && child.blockId) {
             orderedBlockIds.push(child.blockId);
+            blockNames.push(getBlockName(child.blockId));
           }
+        }
+        if (blockNames.length > 0) {
+          embData[`__randomizer_${randomizerIdx}_orden`] = blockNames.map((n, i) => `${i + 1}. ${n}`).join(' | ');
         }
       }
       if (element.type === 'branch' && element.conditions && element.children) {
