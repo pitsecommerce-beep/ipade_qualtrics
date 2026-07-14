@@ -113,7 +113,7 @@ export default function DashboardPage() {
       return;
     }
 
-    router.push(`/survey/${data.id}/edit`);
+    router.push(`/survey/_/edit?surveyId=${data.id}`);
   };
 
   const deleteSurvey = async (id: string) => {
@@ -331,7 +331,7 @@ export default function DashboardPage() {
                     className={`border-b border-[#F1F5F9] hover:bg-[#F8F9FB] cursor-pointer transition-colors ${
                       idx === filtered.length - 1 ? 'border-b-0' : ''
                     }`}
-                    onClick={() => router.push(`/survey/${survey.id}/edit`)}
+                    onClick={() => router.push(`/survey/_/edit?surveyId=${survey.id}`)}
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -377,7 +377,7 @@ export default function DashboardPage() {
                         {menuOpen === survey.id && (
                           <div className="absolute right-0 bottom-full mb-1 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 w-48 z-20 animate-fade-in">
                             <button
-                              onClick={() => { router.push(`/survey/${survey.id}/edit`); setMenuOpen(null); }}
+                              onClick={() => { router.push(`/survey/_/edit?surveyId=${survey.id}`); setMenuOpen(null); }}
                               className="w-full px-4 py-2 text-sm text-left hover:bg-[#F8F9FB] flex items-center gap-2"
                             >
                               <Pencil size={14} /> Editar
@@ -389,7 +389,7 @@ export default function DashboardPage() {
                               <Copy size={14} /> Duplicar
                             </button>
                             <button
-                              onClick={() => { router.push(`/survey/${survey.id}/distribute`); setMenuOpen(null); }}
+                              onClick={() => { router.push(`/survey/_/distribute?surveyId=${survey.id}`); setMenuOpen(null); }}
                               className="w-full px-4 py-2 text-sm text-left hover:bg-[#F8F9FB] flex items-center gap-2"
                             >
                               <Share2 size={14} /> Distribuir

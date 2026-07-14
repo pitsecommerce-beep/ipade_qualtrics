@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Download, RefreshCw, Users, Clock, CheckCircle } from 'lucide-react';
 import type { Survey, SurveyResponse, QuestionType } from '@/types/survey';
@@ -10,8 +10,8 @@ import type { Survey, SurveyResponse, QuestionType } from '@/types/survey';
 export default function ResultsClient() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const params = useParams();
-  const surveyId = params.id as string;
+  const searchParams = useSearchParams();
+  const surveyId = searchParams.get('surveyId') || '';
 
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [responses, setResponses] = useState<SurveyResponse[]>([]);
@@ -139,7 +139,7 @@ export default function ResultsClient() {
       <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push(`/survey/${surveyId}/edit`)} className="p-2 rounded-lg hover:bg-[#F0F2F5] text-[#64748B]">
+            <button onClick={() => router.push(`/survey/_/edit?surveyId=${surveyId}`)} className="p-2 rounded-lg hover:bg-[#F0F2F5] text-[#64748B]">
               <ArrowLeft size={18} />
             </button>
             <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png" alt="IPADE" className="h-7 w-auto" />

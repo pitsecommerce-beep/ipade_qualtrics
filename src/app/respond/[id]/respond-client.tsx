@@ -1,14 +1,14 @@
 'use client';
 
 import { supabase } from '@/lib/supabase';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import type { Survey, Block, Question, ResponseAnswer, FlowElement } from '@/types/survey';
 import { shuffleArray, processPipedText, evaluateDisplayLogic, evaluateCondition } from '@/lib/survey-utils';
 
 export default function RespondClient() {
-  const params = useParams();
-  const surveyId = params.id as string;
+  const searchParams = useSearchParams();
+  const surveyId = searchParams.get('surveyId') || '';
 
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [loading, setLoading] = useState(true);

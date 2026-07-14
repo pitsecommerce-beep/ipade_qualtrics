@@ -1,15 +1,20 @@
 'use client';
 
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function SurveyRedirect() {
   const router = useRouter();
-  const params = useParams();
+  const searchParams = useSearchParams();
+  const surveyId = searchParams.get('surveyId') || '';
 
   useEffect(() => {
-    router.replace(`/survey/${params.id}/edit`);
-  }, [router, params.id]);
+    if (surveyId) {
+      router.replace(`/survey/_/edit?surveyId=${surveyId}`);
+    } else {
+      router.replace('/dashboard');
+    }
+  }, [router, surveyId]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
