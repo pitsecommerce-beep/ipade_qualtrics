@@ -4,7 +4,8 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Download, RefreshCw, Users, Clock, CheckCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Users, Clock, CheckCircle, Trash2, AlertTriangle, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { Survey, SurveyResponse, QuestionType } from '@/types/survey';
 
 export default function ResultsClient() {
@@ -18,6 +19,7 @@ export default function ResultsClient() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'summary' | 'individual'>('summary');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/');
@@ -40,11 +42,14 @@ export default function ResultsClient() {
   };
 
   const deleteResponse = async (responseId: string) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar esta respuesta? Esta acción no se puede deshacer.')) return;
     setDeletingId(responseId);
+    setConfirmDeleteId(null);
     const { error } = await supabase.from('survey_responses').delete().eq('id', responseId);
-    if (!error) {
+    if (error) {
+      toast.error('Error al eliminar la respuesta. Verifica los permisos en Supabase.');
+    } else {
       setResponses(prev => prev.filter(r => r.id !== responseId));
+      toast.success('Respuesta eliminada');
     }
     setDeletingId(null);
   };
@@ -358,12 +363,16 @@ export default function ResultsClient() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={(e) => { e.preventDefault(); deleteResponse(resp.id); }}
+                      onClick={(e) => { e.preventDefault(); setConfirmDeleteId(resp.id); }}
                       disabled={deletingId === resp.id}
                       className="p-1.5 rounded-lg text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
                       title="Eliminar respuesta"
                     >
-                      <Trash2 size={14} />
+                      {deletingId === resp.id ? (
+                        <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
                     </button>
                     <ChevronDown className="w-4 h-4 text-[#94A3B8] group-open:rotate-180 transition-transform" />
                   </div>
@@ -390,6 +399,34 @@ export default function ResultsClient() {
           </div>
         )}
       </main>
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-[#1A202C]">Eliminar respuesta</h3>
+                <p className="text-sm text-[#64748B]">Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setConfirmDeleteId(null)} className="btn-secondary text-sm py-2 px-4">
+                Cancelar
+              </button>
+              <button
+                onClick={() => deleteResponse(confirmDeleteId)}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
