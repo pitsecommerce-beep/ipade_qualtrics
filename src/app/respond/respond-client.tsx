@@ -93,6 +93,14 @@ export default function RespondClient() {
     } catch {}
   };
 
+  const resolveEmbeddedField = (field: { name: string; value: string; values?: string[]; randomize?: boolean }, embData: Record<string, string>) => {
+    if (field.randomize && field.values && field.values.length > 0) {
+      embData[field.name] = field.values[Math.floor(Math.random() * field.values.length)];
+    } else {
+      embData[field.name] = processPipedText(field.value, answers, embData);
+    }
+  };
+
   const processFlow = (flow: FlowElement[], blocks: Block[]) => {
     const embData: Record<string, string> = {};
     const orderedBlockIds: string[] = [];
@@ -100,8 +108,7 @@ export default function RespondClient() {
     for (const element of flow) {
       if (element.type === 'embedded_data' && element.embeddedData) {
         for (const field of element.embeddedData) {
-          const processedValue = processPipedText(field.value, answers, embData);
-          embData[field.name] = processedValue;
+          resolveEmbeddedField(field, embData);
         }
       }
       if (element.type === 'show_block' && element.blockId) {
@@ -113,7 +120,7 @@ export default function RespondClient() {
         for (const child of shuffled.slice(0, count)) {
           if (child.type === 'embedded_data' && child.embeddedData) {
             for (const field of child.embeddedData) {
-              embData[field.name] = processPipedText(field.value, answers, embData);
+              resolveEmbeddedField(field, embData);
             }
           }
           if (child.type === 'show_block' && child.blockId) {
@@ -129,7 +136,7 @@ export default function RespondClient() {
           for (const child of element.children) {
             if (child.type === 'embedded_data' && child.embeddedData) {
               for (const field of child.embeddedData) {
-                embData[field.name] = processPipedText(field.value, answers, embData);
+                resolveEmbeddedField(field, embData);
               }
             }
             if (child.type === 'show_block' && child.blockId) {
