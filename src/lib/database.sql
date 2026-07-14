@@ -1,10 +1,16 @@
--- Supabase SQL schema for IPADE Survey Platform
--- Run this in the Supabase SQL Editor
+-- ============================================================
+-- IPADE Survey Platform — Complete Supabase SQL Schema
+-- Run this ONCE in the Supabase SQL Editor (Dashboard > SQL Editor)
+-- ============================================================
 
--- Enable UUID extension
+-- 0. Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Profiles table (extends Supabase auth.users)
+-- ============================================================
+-- 1. TABLES
+-- ============================================================
+
+-- Profiles (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT NOT NULL,
@@ -15,7 +21,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Surveys table
+-- Surveys
 CREATE TABLE IF NOT EXISTS surveys (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   title TEXT NOT NULL DEFAULT 'Untitled Survey',
@@ -75,7 +81,10 @@ CREATE TABLE IF NOT EXISTS survey_distributions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes
+-- ============================================================
+-- 2. INDEXES
+-- ============================================================
+
 CREATE INDEX IF NOT EXISTS idx_surveys_owner ON surveys(owner_id);
 CREATE INDEX IF NOT EXISTS idx_surveys_status ON surveys(status);
 CREATE INDEX IF NOT EXISTS idx_responses_survey ON survey_responses(survey_id);
@@ -83,14 +92,18 @@ CREATE INDEX IF NOT EXISTS idx_responses_completed ON survey_responses(is_comple
 CREATE INDEX IF NOT EXISTS idx_collaborators_user ON survey_collaborators(user_id);
 CREATE INDEX IF NOT EXISTS idx_collaborators_survey ON survey_collaborators(survey_id);
 
--- Row Level Security
+-- ============================================================
+-- 3. ROW LEVEL SECURITY
+-- ============================================================
+
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE surveys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE survey_collaborators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE survey_responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE survey_distributions ENABLE ROW LEVEL SECURITY;
 
--- Profiles policies
+-- ---------- profiles ----------
+
 CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
@@ -100,12 +113,18 @@ CREATE POLICY "Users can update own profile" ON profiles
 CREATE POLICY "Users can insert own profile" ON profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
 
--- Surveys policies
+-- ---------- surveys ----------
+
+-- Authenticated users see their own + collaborated surveys.
+-- Anonymous users (respondents) can read active surveys to answer them.
 CREATE POLICY "Users can view own surveys" ON surveys
   FOR SELECT USING (
     owner_id = auth.uid() OR
     id IN (SELECT survey_id FROM survey_collaborators WHERE user_id = auth.uid())
   );
+
+CREATE POLICY "Anyone can view active surveys" ON surveys
+  FOR SELECT USING (status = 'active');
 
 CREATE POLICY "Users can create surveys" ON surveys
   FOR INSERT WITH CHECK (owner_id = auth.uid());
@@ -119,7 +138,8 @@ CREATE POLICY "Users can update own surveys" ON surveys
 CREATE POLICY "Users can delete own surveys" ON surveys
   FOR DELETE USING (owner_id = auth.uid());
 
--- Collaborators policies
+-- ---------- survey_collaborators ----------
+
 CREATE POLICY "Survey owners can manage collaborators" ON survey_collaborators
   FOR ALL USING (
     survey_id IN (SELECT id FROM surveys WHERE owner_id = auth.uid())
@@ -128,10 +148,17 @@ CREATE POLICY "Survey owners can manage collaborators" ON survey_collaborators
 CREATE POLICY "Collaborators can view their collaborations" ON survey_collaborators
   FOR SELECT USING (user_id = auth.uid());
 
--- Responses policies (anonymous insert, owner/collaborator read)
+-- ---------- survey_responses ----------
+
+-- Anyone (including anonymous/unauthenticated) can insert a response
 CREATE POLICY "Anyone can submit responses" ON survey_responses
   FOR INSERT WITH CHECK (true);
 
+-- Anyone can update a response (needed for setting IP and submitting answers)
+CREATE POLICY "Anyone can update responses" ON survey_responses
+  FOR UPDATE USING (true);
+
+-- Survey owners and collaborators can read responses
 CREATE POLICY "Survey owners can view responses" ON survey_responses
   FOR SELECT USING (
     survey_id IN (
@@ -141,16 +168,22 @@ CREATE POLICY "Survey owners can view responses" ON survey_responses
     )
   );
 
--- Distributions policies
+-- ---------- survey_distributions ----------
+
 CREATE POLICY "Survey owners can manage distributions" ON survey_distributions
   FOR ALL USING (
     survey_id IN (
       SELECT id FROM surveys WHERE owner_id = auth.uid()
       UNION
-      SELECT survey_id FROM survey_collaborators WHERE user_id = auth.uid() AND role IN ('editor', 'admin'))
+      SELECT survey_id FROM survey_collaborators WHERE user_id = auth.uid() AND role IN ('editor', 'admin')
+    )
   );
 
--- Function to auto-create profile on signup
+-- ============================================================
+-- 4. FUNCTIONS & TRIGGERS
+-- ============================================================
+
+-- Auto-create a profile row when a user signs up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -160,13 +193,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger for auto-creating profiles
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Function to update updated_at
+-- Auto-update updated_at on row modification
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -175,10 +207,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS surveys_updated_at ON surveys;
 CREATE TRIGGER surveys_updated_at
   BEFORE UPDATE ON surveys
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS profiles_updated_at ON profiles;
 CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
