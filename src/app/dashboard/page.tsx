@@ -46,16 +46,27 @@ export default function DashboardPage() {
     if (!user) return;
     setLoadingSurveys(true);
 
-    const { data: owned } = await supabase
+    const { data: owned, error: ownedErr } = await supabase
       .from('surveys')
       .select('id, title, status, created_at, updated_at, owner_id')
       .eq('owner_id', user.id)
       .order('updated_at', { ascending: false });
 
-    const { data: collabs } = await supabase
+    if (ownedErr) {
+      console.error('[dashboard] surveys query failed:', ownedErr.message, ownedErr.details, ownedErr.hint);
+      toast.error(`Error cargando encuestas: ${ownedErr.message}`);
+      setLoadingSurveys(false);
+      return;
+    }
+
+    const { data: collabs, error: collabsErr } = await supabase
       .from('survey_collaborators')
       .select('survey_id')
       .eq('user_id', user.id);
+
+    if (collabsErr) {
+      console.error('[dashboard] collaborators query failed:', collabsErr.message, collabsErr.details, collabsErr.hint);
+    }
 
     if (collabs && collabs.length > 0) {
       const sharedIds = collabs.map(c => c.survey_id);
