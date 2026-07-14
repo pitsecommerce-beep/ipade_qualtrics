@@ -270,6 +270,7 @@ export default function DashboardPage() {
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar proyectos..."
               className="input-field pl-9"
+              style={{ paddingLeft: '2.25rem' }}
             />
           </div>
           <div className="flex gap-2">
