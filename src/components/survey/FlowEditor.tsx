@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, GitBranch, Shuffle, Database, StopCircle, X } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { Plus, Trash2, ChevronDown, ChevronRight, GitBranch, Shuffle, Database, StopCircle, X, GripVertical } from 'lucide-react';
 import type { FlowElement, Block, EmbeddedDataField, BranchCondition } from '@/types/survey';
 import { createFlowElement, createId } from '@/lib/survey-utils';
 
@@ -11,8 +11,22 @@ interface FlowEditorProps {
   onChange: (flow: FlowElement[]) => void;
 }
 
+interface DragInfo {
+  elementId: string;
+  parentId: string | null; // id of the parent container, or null if top-level
+}
+
+interface DropTarget {
+  type: 'between' | 'into-container';
+  parentId: string | null; // null = top-level list, string = inside a container
+  index: number; // insertion index
+}
+
 export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) {
   const [expandedElements, setExpandedElements] = useState<Set<string>>(new Set());
+  const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
+  const [activeDropTarget, setActiveDropTarget] = useState<DropTarget | null>(null);
+  const dragCounterRef = useRef<Map<string, number>>(new Map());
 
   const toggleExpand = (id: string) => {
     const next = new Set(expandedElements);
@@ -20,7 +34,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
     setExpandedElements(next);
   };
 
-  const addElement = (type: FlowElement['type'], parentIdx?: number) => {
+  const addElement = (type: FlowElement['type'], parentId?: string) => {
     const element = createFlowElement(type);
 
     if (type === 'show_block' && blocks.length > 0) {
@@ -44,49 +58,273 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
       element.children = [];
     }
 
-    if (parentIdx !== undefined) {
-      const newFlow = [...flow];
-      if (!newFlow[parentIdx].children) newFlow[parentIdx].children = [];
-      newFlow[parentIdx].children!.push(element);
+    if (parentId !== undefined) {
+      const newFlow = structuredClone(flow);
+      const parent = findElementById(newFlow, parentId);
+      if (parent) {
+        if (!parent.children) parent.children = [];
+        parent.children.push(element);
+      }
       onChange(newFlow);
     } else {
       onChange([...flow, element]);
     }
   };
 
-  const removeElement = (idx: number, parentIdx?: number) => {
-    if (parentIdx !== undefined) {
-      const newFlow = [...flow];
-      newFlow[parentIdx].children = newFlow[parentIdx].children?.filter((_, i) => i !== idx);
+  const findElementById = (elements: FlowElement[], id: string | null | undefined): FlowElement | null => {
+    if (!id) return null;
+    for (const el of elements) {
+      if (el.id === id) return el;
+      if (el.children) {
+        const found = findElementById(el.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const findParentId = (elements: FlowElement[], targetId: string, currentParentId: string | null = null): string | null | undefined => {
+    for (const el of elements) {
+      if (el.id === targetId) return currentParentId;
+      if (el.children) {
+        const found = findParentId(el.children, targetId, el.id);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined; // not found
+  };
+
+  const removeElement = (idx: number, parentId?: string) => {
+    if (parentId !== undefined) {
+      const newFlow = structuredClone(flow);
+      const parent = findElementById(newFlow, parentId);
+      if (parent && parent.children) {
+        parent.children = parent.children.filter((_, i) => i !== idx);
+      }
       onChange(newFlow);
     } else {
       onChange(flow.filter((_, i) => i !== idx));
     }
   };
 
-  const updateElement = (idx: number, updates: Partial<FlowElement>, parentIdx?: number) => {
-    const newFlow = [...flow];
-    if (parentIdx !== undefined) {
-      const children = [...(newFlow[parentIdx].children || [])];
-      children[idx] = { ...children[idx], ...updates };
-      newFlow[parentIdx] = { ...newFlow[parentIdx], children };
+  const updateElement = (idx: number, updates: Partial<FlowElement>, parentId?: string) => {
+    const newFlow = structuredClone(flow);
+    if (parentId !== undefined) {
+      const parent = findElementById(newFlow, parentId);
+      if (parent && parent.children) {
+        parent.children[idx] = { ...parent.children[idx], ...updates };
+      }
     } else {
       newFlow[idx] = { ...newFlow[idx], ...updates };
     }
     onChange(newFlow);
   };
 
-  const moveElement = (idx: number, direction: 'up' | 'down') => {
-    const newFlow = [...flow];
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= newFlow.length) return;
-    [newFlow[idx], newFlow[swapIdx]] = [newFlow[swapIdx], newFlow[idx]];
-    onChange(newFlow);
+  // Check if an element is a descendant of (or is) another element
+  const isDescendantOf = (elements: FlowElement[], childId: string, ancestorId: string): boolean => {
+    if (childId === ancestorId) return true;
+    const ancestor = findElementById(elements, ancestorId);
+    if (!ancestor || !ancestor.children) return false;
+    for (const child of ancestor.children) {
+      if (isDescendantOf([child], childId, child.id)) return true;
+      if (child.id === childId) return true;
+    }
+    return false;
   };
 
-  const renderElement = (element: FlowElement, idx: number, parentIdx?: number, depth: number = 0) => {
+  const handleDrop = useCallback((target: DropTarget) => {
+    if (!dragInfo) return;
+
+    const newFlow = structuredClone(flow);
+    const draggedId = dragInfo.elementId;
+
+    // Prevent dropping a container into itself or its children
+    if (target.parentId && isDescendantOf(flow, target.parentId, draggedId)) {
+      return;
+    }
+
+    // 1. Remove the element from its current position
+    let draggedElement: FlowElement | null = null;
+
+    if (dragInfo.parentId === null) {
+      const idx = newFlow.findIndex(el => el.id === draggedId);
+      if (idx !== -1) {
+        draggedElement = newFlow.splice(idx, 1)[0];
+      }
+    } else {
+      const parent = findElementById(newFlow, dragInfo.parentId);
+      if (parent && parent.children) {
+        const idx = parent.children.findIndex(el => el.id === draggedId);
+        if (idx !== -1) {
+          draggedElement = parent.children.splice(idx, 1)[0];
+        }
+      }
+    }
+
+    if (!draggedElement) return;
+
+    // 2. Insert at the target position
+    if (target.type === 'into-container') {
+      // Drop into a container's children
+      const container = findElementById(newFlow, target.parentId);
+      if (container) {
+        if (!container.children) container.children = [];
+        container.children.push(draggedElement);
+        // Auto-expand the container
+        setExpandedElements(prev => {
+          const next = new Set(prev);
+          next.add(container.id);
+          return next;
+        });
+      }
+    } else {
+      // Drop between elements
+      if (target.parentId === null) {
+        // Top-level insertion
+        newFlow.splice(target.index, 0, draggedElement);
+      } else {
+        const parent = findElementById(newFlow, target.parentId);
+        if (parent) {
+          if (!parent.children) parent.children = [];
+          parent.children.splice(target.index, 0, draggedElement);
+        }
+      }
+    }
+
+    onChange(newFlow);
+  }, [dragInfo, flow, onChange]);
+
+  const handleDragStart = (e: React.DragEvent, elementId: string, parentId: string | null) => {
+    e.stopPropagation();
+    setDragInfo({ elementId, parentId });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', elementId);
+    // Set drag image opacity via a timeout so it applies after the snapshot
+    const target = e.currentTarget as HTMLElement;
+    requestAnimationFrame(() => {
+      target.style.opacity = '0.4';
+    });
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '1';
+    setDragInfo(null);
+    setActiveDropTarget(null);
+    dragCounterRef.current.clear();
+  };
+
+  const dropTargetKey = (target: DropTarget) =>
+    `${target.type}:${target.parentId ?? 'root'}:${target.index}`;
+
+  const isActiveTarget = (target: DropTarget) => {
+    if (!activeDropTarget) return false;
+    return dropTargetKey(activeDropTarget) === dropTargetKey(target);
+  };
+
+  // Drop zone between elements
+  const renderDropZone = (parentId: string | null, index: number) => {
+    const target: DropTarget = { type: 'between', parentId, index };
+    const key = dropTargetKey(target);
+    const isActive = isActiveTarget(target);
+
+    return (
+      <div
+        key={`dz-${key}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const count = (dragCounterRef.current.get(key) || 0) + 1;
+          dragCounterRef.current.set(key, count);
+          if (count === 1) setActiveDropTarget(target);
+        }}
+        onDragLeave={(e) => {
+          e.stopPropagation();
+          const count = (dragCounterRef.current.get(key) || 0) - 1;
+          dragCounterRef.current.set(key, count);
+          if (count <= 0) {
+            dragCounterRef.current.set(key, 0);
+            if (isActiveTarget(target)) setActiveDropTarget(null);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragCounterRef.current.set(key, 0);
+          handleDrop(target);
+          setActiveDropTarget(null);
+          setDragInfo(null);
+        }}
+        style={{
+          height: isActive ? 4 : 12,
+          margin: isActive ? '4px 0' : '0',
+          transition: 'all 150ms ease',
+          borderRadius: 2,
+          background: isActive ? '#2A5A8C' : 'transparent',
+          position: 'relative',
+        }}
+      >
+        {/* Invisible wider hit area */}
+        <div style={{
+          position: 'absolute',
+          top: -6,
+          bottom: -6,
+          left: 0,
+          right: 0,
+        }} />
+      </div>
+    );
+  };
+
+  // Container drop overlay (for dropping INTO a container)
+  const containerDropProps = (containerId: string) => {
+    const target: DropTarget = { type: 'into-container', parentId: containerId, index: -1 };
+    const key = dropTargetKey(target);
+
+    return {
+      onDragOver: (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      },
+      onDragEnter: (e: React.DragEvent) => {
+        e.preventDefault();
+        const count = (dragCounterRef.current.get(key) || 0) + 1;
+        dragCounterRef.current.set(key, count);
+        if (count === 1) setActiveDropTarget(target);
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        const count = (dragCounterRef.current.get(key) || 0) - 1;
+        dragCounterRef.current.set(key, count);
+        if (count <= 0) {
+          dragCounterRef.current.set(key, 0);
+          if (isActiveTarget(target)) setActiveDropTarget(null);
+        }
+      },
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current.set(key, 0);
+        handleDrop(target);
+        setActiveDropTarget(null);
+        setDragInfo(null);
+      },
+    };
+  };
+
+  const isContainerDropActive = (containerId: string) => {
+    if (!activeDropTarget) return false;
+    return activeDropTarget.type === 'into-container' && activeDropTarget.parentId === containerId;
+  };
+
+  const renderElement = (element: FlowElement, idx: number, parentId: string | null = null, isChild: boolean = false) => {
     const isExpanded = expandedElements.has(element.id);
     const hasChildren = element.type === 'branch' || element.type === 'randomizer';
+    const isDragged = dragInfo?.elementId === element.id;
 
     const typeStyles: Record<string, { border: string; bg: string; icon: React.ReactNode; label: string }> = {
       show_block: {
@@ -123,14 +361,41 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
 
     const style = typeStyles[element.type] || typeStyles.show_block;
 
+    const containerActive = hasChildren && isContainerDropActive(element.id);
+
     return (
-      <div key={element.id} className="animate-fade-in" style={{ marginLeft: depth * 32 }}>
-        {/* Connector */}
+      <div
+        key={element.id}
+        className="animate-fade-in"
+        style={{ opacity: isDragged ? 0.4 : 1, transition: 'opacity 150ms ease' }}
+      >
+        {/* Connector line between elements */}
         {idx > 0 && <div className="flow-connector" />}
 
-        <div className={`flow-element ${style.border} ${style.bg} border-2`}>
+        <div
+          className={`flow-element ${style.border} ${style.bg} border-2`}
+          style={{
+            outline: containerActive ? '2px dashed #2A5A8C' : 'none',
+            outlineOffset: 2,
+            background: containerActive ? 'rgba(42, 90, 140, 0.06)' : undefined,
+            transition: 'outline 150ms ease, background 150ms ease',
+          }}
+          {...(hasChildren ? containerDropProps(element.id) : {})}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
+              {/* Drag handle */}
+              <div
+                draggable
+                onDragStart={(e) => handleDragStart(e, element.id, parentId)}
+                onDragEnd={handleDragEnd}
+                className="flex items-center justify-center cursor-grab active:cursor-grabbing text-[#94A3B8] hover:text-[#64748B] select-none"
+                title="Arrastrar para reordenar"
+                style={{ touchAction: 'none' }}
+              >
+                <GripVertical size={16} />
+              </div>
+
               {hasChildren && (
                 <button onClick={() => toggleExpand(element.id)} className="text-[#64748B]">
                   {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -142,7 +407,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                 {element.type === 'show_block' && (
                   <select
                     value={element.blockId || ''}
-                    onChange={e => updateElement(idx, { blockId: e.target.value }, parentIdx)}
+                    onChange={e => updateElement(idx, { blockId: e.target.value }, parentId ?? undefined)}
                     className="ml-2 text-sm bg-transparent border-none outline-none text-[#2A5A8C] font-medium cursor-pointer"
                   >
                     {blocks.map(b => (
@@ -154,13 +419,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
             </div>
 
             <div className="flex items-center gap-1">
-              {parentIdx === undefined && idx > 0 && (
-                <button onClick={() => moveElement(idx, 'up')} className="p-1 rounded hover:bg-white/50 text-[#64748B] text-xs">&#9650;</button>
-              )}
-              {parentIdx === undefined && idx < flow.length - 1 && (
-                <button onClick={() => moveElement(idx, 'down')} className="p-1 rounded hover:bg-white/50 text-[#64748B] text-xs">&#9660;</button>
-              )}
-              <button onClick={() => removeElement(idx, parentIdx)} className="p-1.5 rounded hover:bg-white/50 text-red-400 hover:text-red-600">
+              <button onClick={() => removeElement(idx, parentId ?? undefined)} className="p-1.5 rounded hover:bg-white/50 text-red-400 hover:text-red-600">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -178,7 +437,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                       onChange={e => {
                         const conds = [...(element.conditions || [])];
                         conds[ci] = { ...conds[ci], conjunction: e.target.value as 'and' | 'or' };
-                        updateElement(idx, { conditions: conds }, parentIdx);
+                        updateElement(idx, { conditions: conds }, parentId ?? undefined);
                       }}
                       className="input-field py-1 text-xs w-14"
                     >
@@ -191,7 +450,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                     onChange={e => {
                       const conds = [...(element.conditions || [])];
                       conds[ci] = { ...conds[ci], embeddedDataField: e.target.value };
-                      updateElement(idx, { conditions: conds }, parentIdx);
+                      updateElement(idx, { conditions: conds }, parentId ?? undefined);
                     }}
                     placeholder="Variable"
                     className="input-field py-1 text-xs w-28"
@@ -201,7 +460,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                     onChange={e => {
                       const conds = [...(element.conditions || [])];
                       conds[ci] = { ...conds[ci], operator: e.target.value as BranchCondition['operator'] };
-                      updateElement(idx, { conditions: conds }, parentIdx);
+                      updateElement(idx, { conditions: conds }, parentId ?? undefined);
                     }}
                     className="input-field py-1 text-xs w-28"
                   >
@@ -216,7 +475,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                     onChange={e => {
                       const conds = [...(element.conditions || [])];
                       conds[ci] = { ...conds[ci], value: e.target.value };
-                      updateElement(idx, { conditions: conds }, parentIdx);
+                      updateElement(idx, { conditions: conds }, parentId ?? undefined);
                     }}
                     placeholder="Valor"
                     className="input-field py-1 text-xs w-24"
@@ -224,7 +483,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                   <button
                     onClick={() => {
                       const conds = (element.conditions || []).filter((_, i) => i !== ci);
-                      updateElement(idx, { conditions: conds }, parentIdx);
+                      updateElement(idx, { conditions: conds }, parentId ?? undefined);
                     }}
                     className="text-red-400 hover:text-red-600"
                   >
@@ -236,7 +495,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                 onClick={() => {
                   const conds = [...(element.conditions || [])];
                   conds.push({ operator: 'equals', value: '', conjunction: 'and' });
-                  updateElement(idx, { conditions: conds }, parentIdx);
+                  updateElement(idx, { conditions: conds }, parentId ?? undefined);
                 }}
                 className="text-xs text-[#2A5A8C] flex items-center gap-1"
               >
@@ -254,7 +513,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                   type="number"
                   min={1}
                   value={element.randomizerCount || 1}
-                  onChange={e => updateElement(idx, { randomizerCount: Number(e.target.value) }, parentIdx)}
+                  onChange={e => updateElement(idx, { randomizerCount: Number(e.target.value) }, parentId ?? undefined)}
                   className="input-field py-1 text-xs w-16 text-center"
                 />
                 <span className="text-xs text-[#64748B]">de los siguientes elementos</span>
@@ -263,7 +522,7 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
                 <input
                   type="checkbox"
                   checked={element.randomizerEvenPresent ?? true}
-                  onChange={e => updateElement(idx, { randomizerEvenPresent: e.target.checked }, parentIdx)}
+                  onChange={e => updateElement(idx, { randomizerEvenPresent: e.target.checked }, parentId ?? undefined)}
                   className="rounded border-[#CBD5E1] w-3.5 h-3.5"
                 />
                 Presentar elementos equitativamente
@@ -273,47 +532,115 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
 
           {/* Embedded data fields */}
           {element.type === 'embedded_data' && (
-            <div className="mt-3 pl-9 space-y-2">
+            <div className="mt-3 pl-9 space-y-3">
               {(element.embeddedData || []).map((field, fi) => (
-                <div key={fi} className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-purple-600 bg-purple-100 px-2 py-0.5 rounded">{field.name || 'Variable'}</span>
-                  <span className="text-xs text-[#64748B]">=</span>
-                  <input
-                    value={field.name}
-                    onChange={e => {
-                      const fields = [...(element.embeddedData || [])];
-                      fields[fi] = { ...fields[fi], name: e.target.value };
-                      updateElement(idx, { embeddedData: fields }, parentIdx);
-                    }}
-                    placeholder="Nombre"
-                    className="input-field py-1 text-xs w-28"
-                  />
-                  <input
-                    value={field.value}
-                    onChange={e => {
-                      const fields = [...(element.embeddedData || [])];
-                      fields[fi] = { ...fields[fi], value: e.target.value };
-                      updateElement(idx, { embeddedData: fields }, parentIdx);
-                    }}
-                    placeholder="Valor"
-                    className="input-field py-1 text-xs flex-1"
-                  />
-                  <button
-                    onClick={() => {
-                      const fields = (element.embeddedData || []).filter((_, i) => i !== fi);
-                      updateElement(idx, { embeddedData: fields }, parentIdx);
-                    }}
-                    className="text-red-400 hover:text-red-600"
-                  >
-                    <X size={12} />
-                  </button>
+                <div key={fi} className="space-y-2 p-2 rounded-lg bg-white/60 border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={field.name}
+                      onChange={e => {
+                        const fields = [...(element.embeddedData || [])];
+                        fields[fi] = { ...fields[fi], name: e.target.value };
+                        updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
+                      }}
+                      placeholder="Nombre de variable (ej: Tariffs)"
+                      className="input-field py-1 text-xs flex-1"
+                    />
+                    <label className="flex items-center gap-1.5 text-xs text-purple-600 whitespace-nowrap cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={field.randomize ?? false}
+                        onChange={e => {
+                          const fields = [...(element.embeddedData || [])];
+                          const updated = { ...fields[fi], randomize: e.target.checked };
+                          if (e.target.checked && (!updated.values || updated.values.length === 0)) {
+                            updated.values = [updated.value || '', ''];
+                          }
+                          fields[fi] = updated;
+                          updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
+                        }}
+                        className="rounded border-[#CBD5E1] w-3.5 h-3.5 accent-purple-600"
+                      />
+                      Aleatorizar
+                    </label>
+                    <button
+                      onClick={() => {
+                        const fields = (element.embeddedData || []).filter((_, i) => i !== fi);
+                        updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
+                      }}
+                      className="text-red-400 hover:text-red-600"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+
+                  {field.randomize ? (
+                    <div className="space-y-1.5 pl-2">
+                      <p className="text-[10px] text-purple-500">Se asignará aleatoriamente un valor a cada encuestado. Usar como: <code className="bg-purple-100 px-1 rounded">${`\${e://Field/${field.name || '...'}}`}</code></p>
+                      {(field.values || []).map((val, vi) => (
+                        <div key={vi} className="flex items-center gap-2">
+                          <span className="text-[10px] text-[#94A3B8] w-12 shrink-0">Valor {vi + 1}</span>
+                          <input
+                            value={val}
+                            onChange={e => {
+                              const fields = [...(element.embeddedData || [])];
+                              const vals = [...(fields[fi].values || [])];
+                              vals[vi] = e.target.value;
+                              fields[fi] = { ...fields[fi], values: vals };
+                              updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
+                            }}
+                            placeholder={`Valor posible ${vi + 1}`}
+                            className="input-field py-1 text-xs flex-1"
+                          />
+                          {(field.values || []).length > 2 && (
+                            <button
+                              onClick={() => {
+                                const fields = [...(element.embeddedData || [])];
+                                const vals = (fields[fi].values || []).filter((_, i) => i !== vi);
+                                fields[fi] = { ...fields[fi], values: vals };
+                                updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
+                              }}
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <X size={10} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const fields = [...(element.embeddedData || [])];
+                          const vals = [...(fields[fi].values || []), ''];
+                          fields[fi] = { ...fields[fi], values: vals };
+                          updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
+                        }}
+                        className="text-[10px] text-purple-500 flex items-center gap-1 mt-1"
+                      >
+                        <Plus size={10} /> Agregar valor
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] text-[#94A3B8]">Valor:</span>
+                      <input
+                        value={field.value}
+                        onChange={e => {
+                          const fields = [...(element.embeddedData || [])];
+                          fields[fi] = { ...fields[fi], value: e.target.value };
+                          updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
+                        }}
+                        placeholder="Valor fijo"
+                        className="input-field py-1 text-xs flex-1"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
               <button
                 onClick={() => {
                   const fields = [...(element.embeddedData || [])];
                   fields.push({ name: '', value: '' });
-                  updateElement(idx, { embeddedData: fields }, parentIdx);
+                  updateElement(idx, { embeddedData: fields }, parentId ?? undefined);
                 }}
                 className="text-xs text-purple-600 flex items-center gap-1"
               >
@@ -324,12 +651,30 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
 
           {/* Children */}
           {hasChildren && isExpanded && (
-            <div className="mt-3 pl-4 border-l-2 border-dashed border-[#CBD5E1]">
-              {(element.children || []).map((child, ci) =>
-                renderElement(child, ci, idx, 0)
+            <div
+              className="mt-3 pl-4 border-l-2 border-dashed border-[#CBD5E1]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Drop zone before first child */}
+              {dragInfo && renderDropZone(element.id, 0)}
+
+              {(element.children || []).map((child, ci) => (
+                <div key={child.id}>
+                  {renderElement(child, ci, element.id, true)}
+                  {/* Drop zone after each child */}
+                  {dragInfo && renderDropZone(element.id, ci + 1)}
+                </div>
+              ))}
+
+              {/* Empty container drop message */}
+              {(!element.children || element.children.length === 0) && !dragInfo && (
+                <p className="text-xs text-[#94A3B8] italic py-2">
+                  Arrastre elementos aquí o use el botón de abajo
+                </p>
               )}
+
               <div className="mt-2">
-                <AddElementMenu onAdd={(type) => addElement(type, idx)} compact />
+                <AddElementMenu onAdd={(type) => addElement(type, element.id)} compact />
               </div>
             </div>
           )}
@@ -345,7 +690,16 @@ export default function FlowEditor({ flow, blocks, onChange }: FlowEditorProps) 
         <span className="text-xs text-[#94A3B8]">Publicado</span>
       </div>
 
-      {flow.map((element, idx) => renderElement(element, idx))}
+      {/* Drop zone before first top-level element */}
+      {dragInfo && renderDropZone(null, 0)}
+
+      {flow.map((element, idx) => (
+        <div key={element.id}>
+          {renderElement(element, idx)}
+          {/* Drop zone after each top-level element */}
+          {dragInfo && renderDropZone(null, idx + 1)}
+        </div>
+      ))}
 
       <div className="mt-4">
         <AddElementMenu onAdd={(type) => addElement(type)} />

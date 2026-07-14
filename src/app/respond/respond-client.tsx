@@ -54,11 +54,8 @@ export default function RespondClient() {
       return;
     }
 
-    // Process flow to determine block order and embedded data
-    const processedFlow = processFlow(s.flow, s.blocks);
-    setEmbeddedData(processedFlow.embeddedData);
-
     setSurvey(s);
+    buildBlocks(s);
     setLoading(false);
 
     // Start response record
@@ -93,16 +90,23 @@ export default function RespondClient() {
     } catch {}
   };
 
-  const processFlow = (flow: FlowElement[], blocks: Block[]) => {
+  const [resolvedBlocks, setResolvedBlocks] = useState<Block[]>([]);
+
+  const buildBlocks = (s: Survey) => {
     const embData: Record<string, string> = {};
     const orderedBlockIds: string[] = [];
 
-    for (const element of flow) {
+    const resolveField = (field: { name: string; value: string; values?: string[]; randomize?: boolean }) => {
+      if (field.randomize && field.values && field.values.length > 0) {
+        embData[field.name] = field.values[Math.floor(Math.random() * field.values.length)];
+      } else {
+        embData[field.name] = processPipedText(field.value, {}, embData);
+      }
+    };
+
+    for (const element of s.flow) {
       if (element.type === 'embedded_data' && element.embeddedData) {
-        for (const field of element.embeddedData) {
-          const processedValue = processPipedText(field.value, answers, embData);
-          embData[field.name] = processedValue;
-        }
+        for (const field of element.embeddedData) resolveField(field);
       }
       if (element.type === 'show_block' && element.blockId) {
         orderedBlockIds.push(element.blockId);
@@ -112,9 +116,7 @@ export default function RespondClient() {
         const count = element.randomizerCount || shuffled.length;
         for (const child of shuffled.slice(0, count)) {
           if (child.type === 'embedded_data' && child.embeddedData) {
-            for (const field of child.embeddedData) {
-              embData[field.name] = processPipedText(field.value, answers, embData);
-            }
+            for (const field of child.embeddedData) resolveField(field);
           }
           if (child.type === 'show_block' && child.blockId) {
             orderedBlockIds.push(child.blockId);
@@ -123,14 +125,12 @@ export default function RespondClient() {
       }
       if (element.type === 'branch' && element.conditions && element.children) {
         const conditionsMet = element.conditions.every(c =>
-          evaluateCondition(c, answers, embData)
+          evaluateCondition(c, {}, embData)
         );
         if (conditionsMet) {
           for (const child of element.children) {
             if (child.type === 'embedded_data' && child.embeddedData) {
-              for (const field of child.embeddedData) {
-                embData[field.name] = processPipedText(field.value, answers, embData);
-              }
+              for (const field of child.embeddedData) resolveField(field);
             }
             if (child.type === 'show_block' && child.blockId) {
               orderedBlockIds.push(child.blockId);
@@ -140,15 +140,11 @@ export default function RespondClient() {
       }
     }
 
-    return { orderedBlockIds, embeddedData: embData };
-  };
+    setEmbeddedData(embData);
 
-  const orderedBlocks = useMemo(() => {
-    if (!survey) return [];
-    const result = processFlow(survey.flow, survey.blocks);
     const blocks: Block[] = [];
-    for (const bid of result.orderedBlockIds) {
-      const block = survey.blocks.find(b => b.id === bid);
+    for (const bid of orderedBlockIds) {
+      const block = s.blocks.find(b => b.id === bid);
       if (block) {
         let questions = [...block.questions];
         if (block.randomizeQuestions) {
@@ -163,12 +159,11 @@ export default function RespondClient() {
         blocks.push({ ...block, questions });
       }
     }
-    // If no blocks from flow, show all
-    if (blocks.length === 0) {
-      return survey.blocks;
-    }
-    return blocks;
-  }, [survey, answers]);
+
+    setResolvedBlocks(blocks.length > 0 ? blocks : s.blocks);
+  };
+
+  const orderedBlocks = resolvedBlocks;
 
   const visibleQuestions = useMemo(() => {
     if (!orderedBlocks[currentPageIdx]) return [];

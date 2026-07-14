@@ -168,6 +168,13 @@ export function processPipedText(text: string, answers: Record<string, { value: 
     return JSON.stringify(answer.value);
   });
 
+  // ${e://Field/fieldName} — Qualtrics-style embedded data reference (must run before the simpler ${e:fieldName} pattern)
+  const qualtricsEmbeddedPattern = /\$\{e:\/\/Field\/([^}]+)\}/g;
+  processed = processed.replace(qualtricsEmbeddedPattern, (_, fieldName) => {
+    return embeddedData?.[fieldName] || `[${fieldName}]`;
+  });
+
+  // ${e:fieldName} — simple embedded data reference
   const embeddedPattern = /\$\{e:([^}]+)\}/g;
   processed = processed.replace(embeddedPattern, (_, fieldName) => {
     return embeddedData?.[fieldName] || `[${fieldName}]`;

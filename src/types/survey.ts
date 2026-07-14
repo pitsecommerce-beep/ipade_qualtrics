@@ -89,6 +89,8 @@ export interface Block {
 export interface EmbeddedDataField {
   name: string;
   value: string;
+  values?: string[];  // multiple possible values for random assignment
+  randomize?: boolean; // if true, randomly pick one value from `values` for each respondent
 }
 
 export interface BranchCondition {
