@@ -3,7 +3,7 @@
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Plus, Search, LogOut, MoreHorizontal, Pencil, Trash2, Share2, Copy, FolderOpen, Star, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Survey } from '@/types/survey';
@@ -148,6 +148,14 @@ export default function DashboardPage() {
     }
     setMenuOpen(null);
   };
+
+  useEffect(() => {
+    const handleClick = () => setMenuOpen(null);
+    if (menuOpen) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [menuOpen]);
 
   const currentList = tab === 'mine' ? surveys : sharedSurveys;
   const filtered = currentList.filter(s => {
@@ -294,7 +302,7 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#E2E8F0]">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#E2E8F0] text-left">
@@ -356,7 +364,7 @@ export default function DashboardPage() {
                           <MoreHorizontal size={16} />
                         </button>
                         {menuOpen === survey.id && (
-                          <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 w-48 z-20 animate-fade-in">
+                          <div className="absolute right-0 bottom-full mb-1 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 w-48 z-20 animate-fade-in">
                             <button
                               onClick={() => { router.push(`/survey/${survey.id}/edit`); setMenuOpen(null); }}
                               className="w-full px-4 py-2 text-sm text-left hover:bg-[#F8F9FB] flex items-center gap-2"
