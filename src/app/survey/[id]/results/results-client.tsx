@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Download, RefreshCw, Users, Clock, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Users, Clock, CheckCircle, Trash2 } from 'lucide-react';
 import type { Survey, SurveyResponse, QuestionType } from '@/types/survey';
 
 export default function ResultsClient() {
@@ -17,6 +17,7 @@ export default function ResultsClient() {
   const [responses, setResponses] = useState<SurveyResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'summary' | 'individual'>('summary');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/');
@@ -30,12 +31,22 @@ export default function ResultsClient() {
     setLoading(true);
     const [surveyRes, responsesRes] = await Promise.all([
       supabase.from('surveys').select('*').eq('id', surveyId).single(),
-      supabase.from('survey_responses').select('*').eq('survey_id', surveyId).eq('is_complete', true).order('completed_at', { ascending: false }),
+      supabase.from('survey_responses').select('*').eq('survey_id', surveyId).order('started_at', { ascending: false }),
     ]);
 
     if (surveyRes.data) setSurvey(surveyRes.data as unknown as Survey);
     if (responsesRes.data) setResponses(responsesRes.data as unknown as SurveyResponse[]);
     setLoading(false);
+  };
+
+  const deleteResponse = async (responseId: string) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar esta respuesta? Esta acción no se puede deshacer.')) return;
+    setDeletingId(responseId);
+    const { error } = await supabase.from('survey_responses').delete().eq('id', responseId);
+    if (!error) {
+      setResponses(prev => prev.filter(r => r.id !== responseId));
+    }
+    setDeletingId(null);
   };
 
   const exportCSV = () => {
@@ -58,7 +69,7 @@ export default function ResultsClient() {
     const embeddedFieldNames = collectEmbeddedFields(survey.flow);
 
     const headers = [
-      'ID Respuesta', 'IP', 'Inicio', 'Completado',
+      'ID Respuesta', 'IP', 'Inicio', 'Completado', 'Estado',
       ...embeddedFieldNames.map(n => `[Variable] ${n}`),
       ...allQuestions.map(q => q.text || q.id),
     ];
@@ -69,6 +80,7 @@ export default function ResultsClient() {
         r.respondent_ip || '',
         r.started_at,
         r.completed_at || '',
+        r.completed_at ? 'Completa' : 'Parcial',
       ];
       for (const fieldName of embeddedFieldNames) {
         row.push(r.embedded_data?.[fieldName] || '');
@@ -154,7 +166,9 @@ export default function ResultsClient() {
     );
   }
 
-  const completedCount = responses.length;
+  const completedResponses = responses.filter(r => r.completed_at);
+  const partialResponses = responses.filter(r => !r.completed_at);
+  const completedCount = completedResponses.length;
   const allQuestions = survey.blocks.flatMap(b => b.questions);
 
   return (
@@ -188,7 +202,7 @@ export default function ResultsClient() {
             </div>
             <div>
               <p className="text-2xl font-bold text-[#1B3A5C]">{completedCount}</p>
-              <p className="text-sm text-[#64748B]">Respuestas completas</p>
+              <p className="text-sm text-[#64748B]">Completas{partialResponses.length > 0 && ` · ${partialResponses.length} parcial${partialResponses.length > 1 ? 'es' : ''}`}</p>
             </div>
           </div>
           <div className="card flex items-center gap-4">
@@ -332,16 +346,27 @@ export default function ResultsClient() {
                       {ri + 1}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-[#1A202C]">
+                      <p className="text-sm font-medium text-[#1A202C] flex items-center gap-2">
                         Respuesta #{ri + 1}
+                        {!resp.completed_at && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Parcial</span>}
                       </p>
                       <p className="text-xs text-[#94A3B8]">
                         {resp.respondent_ip && `IP: ${resp.respondent_ip} · `}
-                        {resp.completed_at && new Date(resp.completed_at).toLocaleString('es-MX')}
+                        {resp.completed_at ? new Date(resp.completed_at).toLocaleString('es-MX') : `Iniciada ${new Date(resp.started_at).toLocaleString('es-MX')}`}
                       </p>
                     </div>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-[#94A3B8] group-open:rotate-180 transition-transform" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.preventDefault(); deleteResponse(resp.id); }}
+                      disabled={deletingId === resp.id}
+                      className="p-1.5 rounded-lg text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
+                      title="Eliminar respuesta"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    <ChevronDown className="w-4 h-4 text-[#94A3B8] group-open:rotate-180 transition-transform" />
+                  </div>
                 </summary>
                 <div className="mt-4 pt-4 border-t border-[#F1F5F9] space-y-3">
                   {allQuestions.map(q => {
