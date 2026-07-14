@@ -41,7 +41,12 @@ export default function DistributeClient() {
     setLoading(false);
   };
 
-  const surveyUrl = typeof window !== 'undefined' ? `${window.location.origin}/respond/_/?surveyId=${surveyId}` : '';
+  const surveyUrl = (() => {
+    if (typeof window === 'undefined') return '';
+    const pathIdx = window.location.pathname.indexOf('/survey/');
+    const basePath = pathIdx > 0 ? window.location.pathname.substring(0, pathIdx) : '';
+    return `${window.location.origin}${basePath}/respond/_/?surveyId=${surveyId}`;
+  })();
 
   const copyLink = () => {
     navigator.clipboard.writeText(surveyUrl);

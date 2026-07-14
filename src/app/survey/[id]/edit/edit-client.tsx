@@ -241,7 +241,11 @@ export default function EditClient() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={() => window.open(`/respond/_/?surveyId=${survey.id}`, '_blank')} className="btn-secondary text-xs py-1.5 px-3">
+            <button onClick={() => {
+              const pathIdx = window.location.pathname.indexOf('/survey/');
+              const basePath = pathIdx > 0 ? window.location.pathname.substring(0, pathIdx) : '';
+              window.open(`${basePath}/respond/_/?surveyId=${survey.id}`, '_blank');
+            }} className="btn-secondary text-xs py-1.5 px-3">
               <Eye size={14} /> Vista Previa
             </button>
             <button onClick={toggleStatus} className={`text-xs py-1.5 px-3 rounded-lg font-medium flex items-center gap-1.5 ${
