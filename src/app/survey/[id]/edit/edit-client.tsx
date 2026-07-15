@@ -46,6 +46,8 @@ export default function EditClient() {
   const [showAddQuestion, setShowAddQuestion] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [confirmDeleteBlockIdx, setConfirmDeleteBlockIdx] = useState<number | null>(null);
+  const [dragQuestionIdx, setDragQuestionIdx] = useState<number | null>(null);
+  const [dropQuestionIdx, setDropQuestionIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/');
@@ -194,6 +196,16 @@ export default function EditClient() {
     const duplicate = { ...original, id: createId() };
     const questions = [...blocks[selectedBlockIdx].questions];
     questions.splice(qIdx + 1, 0, duplicate);
+    blocks[selectedBlockIdx] = { ...blocks[selectedBlockIdx], questions };
+    updateSurvey({ blocks });
+  };
+
+  const reorderQuestion = (fromIdx: number, toIdx: number) => {
+    if (!survey || fromIdx === toIdx) return;
+    const blocks = [...survey.blocks];
+    const questions = [...blocks[selectedBlockIdx].questions];
+    const [moved] = questions.splice(fromIdx, 1);
+    questions.splice(toIdx, 0, moved);
     blocks[selectedBlockIdx] = { ...blocks[selectedBlockIdx], questions };
     updateSurvey({ blocks });
   };
@@ -654,15 +666,42 @@ export default function EditClient() {
                     {/* Questions */}
                     <div className="space-y-4">
                       {currentBlock.questions.map((question, qIdx) => (
-                        <QuestionEditor
+                        <div
                           key={question.id}
-                          question={question}
-                          index={qIdx}
-                          onChange={(q) => updateQuestion(qIdx, q)}
-                          onDelete={() => deleteQuestion(qIdx)}
-                          onDuplicate={() => duplicateQuestion(qIdx)}
-                          allQuestions={allQuestions}
-                        />
+                          draggable
+                          onDragStart={(e) => {
+                            setDragQuestionIdx(qIdx);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            setDropQuestionIdx(qIdx);
+                          }}
+                          onDragLeave={() => {
+                            if (dropQuestionIdx === qIdx) setDropQuestionIdx(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (dragQuestionIdx !== null) reorderQuestion(dragQuestionIdx, qIdx);
+                            setDragQuestionIdx(null);
+                            setDropQuestionIdx(null);
+                          }}
+                          onDragEnd={() => {
+                            setDragQuestionIdx(null);
+                            setDropQuestionIdx(null);
+                          }}
+                          className={`transition-all ${dragQuestionIdx === qIdx ? 'opacity-40' : ''} ${dropQuestionIdx === qIdx && dragQuestionIdx !== qIdx ? 'border-t-2 border-[#C4A84D] pt-1' : ''}`}
+                        >
+                          <QuestionEditor
+                            question={question}
+                            index={qIdx}
+                            onChange={(q) => updateQuestion(qIdx, q)}
+                            onDelete={() => deleteQuestion(qIdx)}
+                            onDuplicate={() => duplicateQuestion(qIdx)}
+                            allQuestions={allQuestions}
+                          />
+                        </div>
                       ))}
                     </div>
 
