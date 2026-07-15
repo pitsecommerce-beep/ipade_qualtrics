@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { ArrowLeft, Save, Eye, Play, Square, Settings, LayoutList, GitBranch as FlowIcon, BarChart3, Share2, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Eye, Play, Square, Settings, LayoutList, GitBranch as FlowIcon, BarChart3, Share2, Plus, Trash2, AlertTriangle, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Survey, Block, Question, QuestionType } from '@/types/survey';
 import { createBlock, createQuestion, createId, getQuestionTypeLabel } from '@/lib/survey-utils';
@@ -45,6 +45,9 @@ export default function EditClient() {
   const [selectedBlockIdx, setSelectedBlockIdx] = useState(0);
   const [showAddQuestion, setShowAddQuestion] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [confirmDeleteBlockIdx, setConfirmDeleteBlockIdx] = useState<number | null>(null);
+  const [dragQuestionIdx, setDragQuestionIdx] = useState<number | null>(null);
+  const [dropQuestionIdx, setDropQuestionIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/');
@@ -197,6 +200,218 @@ export default function EditClient() {
     updateSurvey({ blocks });
   };
 
+  const reorderQuestion = (fromIdx: number, toIdx: number) => {
+    if (!survey || fromIdx === toIdx) return;
+    const blocks = [...survey.blocks];
+    const questions = [...blocks[selectedBlockIdx].questions];
+    const [moved] = questions.splice(fromIdx, 1);
+    questions.splice(toIdx, 0, moved);
+    blocks[selectedBlockIdx] = { ...blocks[selectedBlockIdx], questions };
+    updateSurvey({ blocks });
+  };
+
+  const generatePrintPDF = () => {
+    if (!survey) return;
+
+    const getInstruction = (type: QuestionType): string => {
+      const map: Partial<Record<QuestionType, string>> = {
+        multiple_choice: 'Selecciona una opción.',
+        multi_select: 'Selecciona todas las que apliquen.',
+        dropdown: 'Selecciona una opción.',
+        text_entry: 'Escribe tu respuesta.',
+        essay: 'Escribe tu respuesta detallada.',
+        likert: 'Selecciona una opción en la escala.',
+        slider: 'Indica un valor en la escala.',
+        nps: 'Selecciona un número del 0 al 10.',
+        yes_no: 'Selecciona una opción.',
+        rank_order: 'Ordena los elementos del 1 al N.',
+        constant_sum: 'Distribuye el total entre las categorías.',
+        matrix: 'Para cada fila, selecciona una columna.',
+        date: 'Escribe la fecha.',
+        image_choice: 'Selecciona una imagen.',
+        group_rank: 'Ordena los elementos del 1 al N.',
+        file_upload: 'Adjunta tu archivo.',
+      };
+      return map[type] || '';
+    };
+
+    const renderBold = (text: string) => text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    const renderOptions = (q: Question, qNum: number): string => {
+      switch (q.type) {
+        case 'multiple_choice':
+        case 'dropdown':
+        case 'yes_no':
+          return (q.options || []).map(o =>
+            `<div class="option"><span class="radio"></span><span>${o.text}</span></div>`
+          ).join('');
+        case 'multi_select':
+          return (q.options || []).map(o =>
+            `<div class="option"><span class="checkbox"></span><span>${o.text}</span></div>`
+          ).join('');
+        case 'likert':
+          return `<div class="likert-row">${(q.options || []).map(o =>
+            `<div class="likert-opt"><span class="radio"></span><span class="likert-label">${o.text}</span></div>`
+          ).join('')}</div>`;
+        case 'text_entry':
+          return '<div class="text-line"></div>';
+        case 'essay':
+          return '<div class="text-box"></div>';
+        case 'nps':
+          return `<div class="nps-row">${Array.from({ length: 11 }, (_, i) =>
+            `<div class="nps-num"><span class="radio"></span><span>${i}</span></div>`
+          ).join('')}</div><div class="nps-labels"><span>${q.npsLeftLabel || '0'}</span><span>${q.npsRightLabel || '10'}</span></div>`;
+        case 'slider':
+          return `<div class="slider-print"><span>${q.sliderMinLabel || (q.sliderMin ?? 0)}</span><div class="slider-track"></div><span>${q.sliderMaxLabel || (q.sliderMax ?? 100)}</span></div>`;
+        case 'rank_order':
+        case 'group_rank':
+          return (q.options || []).map(o =>
+            `<div class="option"><span class="rank-box"></span><span>${o.text}</span></div>`
+          ).join('');
+        case 'constant_sum':
+          return (q.options || []).map(o =>
+            `<div class="option"><span>${o.text}</span><span class="sum-input">____</span></div>`
+          ).join('') + `<div class="sum-total">Total: ${q.constantSumTotal || 100}</div>`;
+        case 'matrix':
+          return `<table class="matrix"><thead><tr><th></th>${(q.matrixColumns || []).map(c =>
+            `<th>${c.text}</th>`
+          ).join('')}</tr></thead><tbody>${(q.matrixRows || []).map(r =>
+            `<tr><td class="row-label">${r.text}</td>${(q.matrixColumns || []).map(() =>
+              '<td><span class="radio"></span></td>'
+            ).join('')}</tr>`
+          ).join('')}</tbody></table>`;
+        case 'date':
+          return '<div class="date-field">____/____/________</div>';
+        default:
+          return '';
+      }
+    };
+
+    let questionNum = 0;
+    const blocksHtml = survey.blocks.filter(b => b.type !== 'welcome').map(block => {
+      const questionsHtml = block.questions.map(q => {
+        questionNum++;
+        const instruction = getInstruction(q.type);
+        return `
+          <div class="question">
+            <div class="q-header">
+              <span class="q-num">${questionNum}.</span>
+              <div class="q-text">
+                <p class="q-title">${renderBold(q.text)}${q.required ? ' <span class="required">*</span>' : ''}</p>
+                ${q.description ? `<p class="q-desc">${renderBold(q.description)}</p>` : ''}
+                ${instruction ? `<p class="q-instruction">${instruction}</p>` : ''}
+              </div>
+            </div>
+            <div class="q-body">${renderOptions(q, questionNum)}</div>
+          </div>`;
+      }).join('');
+
+      return `
+        <div class="block">
+          <div class="block-title">${block.name}</div>
+          ${block.description ? `<p class="block-desc">${block.description}</p>` : ''}
+          ${questionsHtml}
+        </div>`;
+    }).join('');
+
+    const welcomeBlock = survey.blocks.find(b => b.type === 'welcome');
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>${survey.title}</title>
+<style>
+  @page { margin: 2cm 1.8cm; size: letter; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, 'Times New Roman', serif; color: #1A202C; font-size: 11pt; line-height: 1.5; }
+
+  .header { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #1B3A5C; padding-bottom: 14px; margin-bottom: 20px; }
+  .header img { height: 50px; }
+  .header-text h1 { font-size: 18pt; color: #1B3A5C; font-weight: bold; }
+  .header-text p { font-size: 9pt; color: #64748B; margin-top: 2px; }
+
+  .welcome { background: #F8F9FB; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; }
+  .welcome p { font-size: 10pt; color: #4A5568; }
+
+  .block { margin-bottom: 28px; page-break-inside: avoid; }
+  .block-title { font-size: 13pt; font-weight: bold; color: #1B3A5C; border-bottom: 1.5px solid #C4A84D; padding-bottom: 4px; margin-bottom: 14px; }
+  .block-desc { font-size: 9.5pt; color: #64748B; margin-bottom: 12px; }
+
+  .question { margin-bottom: 20px; page-break-inside: avoid; }
+  .q-header { display: flex; gap: 8px; margin-bottom: 8px; }
+  .q-num { font-weight: bold; color: #C4A84D; font-size: 11pt; min-width: 22px; }
+  .q-title { font-weight: 600; font-size: 11pt; color: #1A202C; }
+  .q-desc { font-size: 9.5pt; color: #64748B; margin-top: 3px; white-space: pre-wrap; }
+  .q-instruction { font-size: 8.5pt; color: #94A3B8; font-style: italic; margin-top: 3px; }
+  .required { color: #E53E3E; }
+
+  .q-body { padding-left: 30px; }
+
+  .option { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 10.5pt; }
+  .radio { display: inline-block; width: 13px; height: 13px; border: 1.5px solid #94A3B8; border-radius: 50%; flex-shrink: 0; }
+  .checkbox { display: inline-block; width: 13px; height: 13px; border: 1.5px solid #94A3B8; border-radius: 2px; flex-shrink: 0; }
+  .rank-box { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1.5px solid #94A3B8; border-radius: 4px; font-size: 9pt; color: #94A3B8; flex-shrink: 0; }
+
+  .likert-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .likert-opt { display: flex; align-items: center; gap: 5px; font-size: 9.5pt; }
+  .likert-label { white-space: nowrap; }
+
+  .nps-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }
+  .nps-num { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9pt; }
+  .nps-labels { display: flex; justify-content: space-between; font-size: 8pt; color: #94A3B8; }
+
+  .slider-print { display: flex; align-items: center; gap: 10px; font-size: 9.5pt; color: #64748B; }
+  .slider-track { flex: 1; height: 6px; border: 1px solid #CBD5E1; border-radius: 3px; }
+
+  .text-line { border-bottom: 1px solid #CBD5E1; height: 28px; margin-bottom: 4px; }
+  .text-box { border: 1px solid #CBD5E1; border-radius: 4px; height: 80px; }
+
+  .date-field { font-size: 11pt; color: #94A3B8; letter-spacing: 1px; }
+
+  .sum-input { border-bottom: 1px solid #CBD5E1; min-width: 50px; text-align: center; color: #94A3B8; margin-left: auto; }
+  .sum-total { text-align: right; font-size: 9.5pt; color: #64748B; margin-top: 6px; font-weight: 600; }
+
+  table.matrix { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  table.matrix th { text-align: center; padding: 6px 8px; font-weight: 600; color: #1B3A5C; border-bottom: 1.5px solid #E2E8F0; font-size: 9pt; }
+  table.matrix td { text-align: center; padding: 6px 8px; border-bottom: 1px solid #F1F5F9; }
+  table.matrix .row-label { text-align: left; font-weight: 500; }
+
+  .footer { margin-top: 30px; border-top: 1.5px solid #E2E8F0; padding-top: 10px; text-align: center; font-size: 8pt; color: #94A3B8; }
+
+  @media print {
+    .question { page-break-inside: avoid; }
+    .block { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png" alt="IPADE" crossorigin="anonymous">
+    <div class="header-text">
+      <h1>${survey.title}</h1>
+      ${survey.description ? `<p>${survey.description}</p>` : '<p>IPADE Business School — Plataforma de Encuestas</p>'}
+    </div>
+  </div>
+
+  ${welcomeBlock?.welcomeContent ? `<div class="welcome">${welcomeBlock.welcomeContent}</div>` : ''}
+
+  ${blocksHtml}
+
+  <div class="footer">
+    IPADE Business School &mdash; Plataforma de Encuestas &mdash; ${survey.title}
+  </div>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => printWindow.print();
+    }
+  };
+
   const toggleStatus = async () => {
     if (!survey) return;
     const newStatus = survey.status === 'active' ? 'closed' : survey.status === 'closed' ? 'draft' : 'active';
@@ -241,6 +456,9 @@ export default function EditClient() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button onClick={generatePrintPDF} className="btn-secondary text-xs py-1.5 px-3" title="Descargar PDF para imprimir">
+              <Printer size={14} /> PDF
+            </button>
             <button onClick={() => {
               const pathIdx = window.location.pathname.indexOf('/survey/');
               const basePath = pathIdx > 0 ? window.location.pathname.substring(0, pathIdx) : '';
@@ -326,7 +544,7 @@ export default function EditClient() {
                       </div>
                       {survey.blocks.length > 1 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteBlock(idx); }}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteBlockIdx(idx); }}
                           className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${
                             selectedBlockIdx === idx ? 'hover:bg-white/20 text-white/60' : 'hover:bg-red-50 text-red-400'
                           }`}
@@ -448,15 +666,42 @@ export default function EditClient() {
                     {/* Questions */}
                     <div className="space-y-4">
                       {currentBlock.questions.map((question, qIdx) => (
-                        <QuestionEditor
+                        <div
                           key={question.id}
-                          question={question}
-                          index={qIdx}
-                          onChange={(q) => updateQuestion(qIdx, q)}
-                          onDelete={() => deleteQuestion(qIdx)}
-                          onDuplicate={() => duplicateQuestion(qIdx)}
-                          allQuestions={allQuestions}
-                        />
+                          draggable
+                          onDragStart={(e) => {
+                            setDragQuestionIdx(qIdx);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            setDropQuestionIdx(qIdx);
+                          }}
+                          onDragLeave={() => {
+                            if (dropQuestionIdx === qIdx) setDropQuestionIdx(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (dragQuestionIdx !== null) reorderQuestion(dragQuestionIdx, qIdx);
+                            setDragQuestionIdx(null);
+                            setDropQuestionIdx(null);
+                          }}
+                          onDragEnd={() => {
+                            setDragQuestionIdx(null);
+                            setDropQuestionIdx(null);
+                          }}
+                          className={`transition-all ${dragQuestionIdx === qIdx ? 'opacity-40' : ''} ${dropQuestionIdx === qIdx && dragQuestionIdx !== qIdx ? 'border-t-2 border-[#C4A84D] pt-1' : ''}`}
+                        >
+                          <QuestionEditor
+                            question={question}
+                            index={qIdx}
+                            onChange={(q) => updateQuestion(qIdx, q)}
+                            onDelete={() => deleteQuestion(qIdx)}
+                            onDuplicate={() => duplicateQuestion(qIdx)}
+                            allQuestions={allQuestions}
+                          />
+                        </div>
                       ))}
                     </div>
 
@@ -633,6 +878,35 @@ export default function EditClient() {
           </main>
         )}
       </div>
+
+      {confirmDeleteBlockIdx !== null && survey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDeleteBlockIdx(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-[#1A202C]">Eliminar bloque</h3>
+                <p className="text-sm text-[#64748B]">
+                  Se eliminará &quot;{survey.blocks[confirmDeleteBlockIdx]?.name}&quot; con {survey.blocks[confirmDeleteBlockIdx]?.questions.length || 0} pregunta(s). Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setConfirmDeleteBlockIdx(null)} className="btn-secondary text-sm py-2 px-4">
+                Cancelar
+              </button>
+              <button
+                onClick={() => { deleteBlock(confirmDeleteBlockIdx); setConfirmDeleteBlockIdx(null); }}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
