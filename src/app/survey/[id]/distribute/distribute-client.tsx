@@ -223,7 +223,8 @@ export default function DistributeClient() {
                 value={newCollabEmail}
                 onChange={e => setNewCollabEmail(e.target.value)}
                 placeholder="correo@ejemplo.com"
-                className="input-field flex-1"
+                className="input-field flex-1 min-w-0"
+                style={{ width: 'auto' }}
               />
               <select
                 value={newCollabRole}
