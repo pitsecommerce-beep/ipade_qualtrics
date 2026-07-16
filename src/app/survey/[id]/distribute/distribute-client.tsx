@@ -59,11 +59,17 @@ export default function DistributeClient() {
     if (!newCollabEmail || addingCollab) return;
     setAddingCollab(true);
 
-    const { data: existingUser } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', newCollabEmail)
-      .single();
+    let existingUser: { id: string } | null = null;
+    try {
+      const res = await fetch('/api/lookup-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newCollabEmail.trim().toLowerCase() }),
+      });
+      if (res.ok) {
+        existingUser = await res.json();
+      }
+    } catch {}
 
     if (!existingUser) {
       toast.error('Usuario no encontrado. Debe tener una cuenta.');
@@ -223,8 +229,7 @@ export default function DistributeClient() {
                 value={newCollabEmail}
                 onChange={e => setNewCollabEmail(e.target.value)}
                 placeholder="correo@ejemplo.com"
-                className="input-field flex-1 min-w-0"
-                style={{ width: 'auto' }}
+                className="flex-1 min-w-0 rounded-lg border-[1.5px] border-[#E2E8F0] bg-white px-3 py-2.5 text-sm text-[#1A202C] outline-none transition-all focus:border-[#1B3A5C] focus:shadow-[0_0_0_3px_rgba(27,58,92,0.1)] placeholder:text-[#94A3B8]"
               />
               <select
                 value={newCollabRole}
