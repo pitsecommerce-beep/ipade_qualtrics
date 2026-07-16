@@ -59,17 +59,10 @@ export default function DistributeClient() {
     if (!newCollabEmail || addingCollab) return;
     setAddingCollab(true);
 
-    let existingUser: { id: string } | null = null;
-    try {
-      const res = await fetch('/api/lookup-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newCollabEmail.trim().toLowerCase() }),
-      });
-      if (res.ok) {
-        existingUser = await res.json();
-      }
-    } catch {}
+    const { data: lookupResult } = await supabase
+      .rpc('lookup_user_by_email', { lookup_email: newCollabEmail.trim() });
+
+    const existingUser = Array.isArray(lookupResult) ? lookupResult[0] : lookupResult;
 
     if (!existingUser) {
       toast.error('Usuario no encontrado. Debe tener una cuenta.');
