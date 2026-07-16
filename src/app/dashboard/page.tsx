@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<'mine' | 'shared'>('mine');
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -211,7 +212,7 @@ export default function DashboardPage() {
               {user.email}
             </span>
             <button
-              onClick={() => signOut()}
+              onClick={() => setShowLogoutModal(true)}
               className="text-[#64748B] hover:text-[#1B3A5C] transition-colors p-2 rounded-lg hover:bg-[#F0F2F5]"
               title="Cerrar sesión"
             >
@@ -413,6 +414,29 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowLogoutModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl border border-[#E2E8F0] p-6 max-w-sm w-full mx-4 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-[#1B3A5C] font-[Georgia] mb-2">Cerrar sesión</h3>
+            <p className="text-sm text-[#64748B] mb-6">¿Estás seguro de que deseas cerrar sesión?</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-[#E2E8F0] text-[#64748B] hover:bg-[#F8F9FB] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => signOut()}
+                className="px-4 py-2 text-sm rounded-lg bg-[#C62828] text-white hover:bg-[#B71C1C] transition-colors"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,16 +9,26 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServerSupabaseClient();
+  const trimmed = email.trim().toLowerCase();
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('profiles')
     .select('id, email')
-    .eq('email', email.trim().toLowerCase())
+    .ilike('email', trimmed)
     .single();
 
-  if (error || !data) {
-    return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+  if (data) {
+    return NextResponse.json({ id: data.id, email: data.email });
   }
 
-  return NextResponse.json({ id: data.id, email: data.email });
+  const { data: authData } = await supabase.auth.admin.listUsers();
+  const authUser = authData?.users?.find(
+    u => u.email?.toLowerCase() === trimmed
+  );
+
+  if (authUser) {
+    return NextResponse.json({ id: authUser.id, email: authUser.email });
+  }
+
+  return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
 }
