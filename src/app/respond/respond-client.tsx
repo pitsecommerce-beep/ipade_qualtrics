@@ -22,6 +22,7 @@ export default function RespondClient() {
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordVerified, setPasswordVerified] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [alreadyResponded, setAlreadyResponded] = useState(false);
 
   useEffect(() => {
     if (surveyId) loadSurvey();
@@ -52,6 +53,16 @@ export default function RespondClient() {
       setError('Esta encuesta ha expirado.');
       setLoading(false);
       return;
+    }
+
+    if (!s.settings.allowMultipleResponses) {
+      const storageKey = `survey_responded_${surveyId}`;
+      if (localStorage.getItem(storageKey)) {
+        setSurvey(s);
+        setAlreadyResponded(true);
+        setLoading(false);
+        return;
+      }
     }
 
     setSurvey(s);
@@ -260,6 +271,10 @@ export default function RespondClient() {
       return;
     }
 
+    if (!survey?.settings.allowMultipleResponses) {
+      localStorage.setItem(`survey_responded_${surveyId}`, 'true');
+    }
+
     setSubmitted(true);
   };
 
@@ -299,6 +314,18 @@ export default function RespondClient() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
         <div className="animate-spin rounded-full h-10 w-10 border-3 border-[#1B3A5C] border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (alreadyResponded) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-8 max-w-md text-center">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/IPADE_Business_School_Escudo.png/250px-IPADE_Business_School_Escudo.png" alt="IPADE" className="h-12 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-[#1B3A5C] font-[Georgia] mb-2">Ya respondiste esta encuesta</h2>
+          <p className="text-[#64748B]">Solo se permite una respuesta por dispositivo para esta encuesta.</p>
+        </div>
       </div>
     );
   }
