@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
 
 export default function Home() {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp, signInWithMicrosoft } = useAuth();
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -16,6 +16,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -254,6 +255,44 @@ export default function Home() {
                   )}
                 </button>
               </form>
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[#E2E8F0]" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-background px-3 text-[#94A3B8]">o continúa con</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={microsoftLoading || submitting}
+                onClick={async () => {
+                  setMicrosoftLoading(true);
+                  setError('');
+                  const { error } = await signInWithMicrosoft();
+                  if (error) {
+                    setError(error.message);
+                    setMicrosoftLoading(false);
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 border-[1.5px] border-[#E2E8F0] rounded-lg font-medium text-sm text-[#1B3A5C] hover:bg-[#F1F5F9] hover:border-[#94A3B8] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {microsoftLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-[#1B3A5C] border-t-transparent" />
+                ) : (
+                  <>
+                    <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                    </svg>
+                    Continuar con Microsoft
+                  </>
+                )}
+              </button>
 
               <div className="mt-6 text-center">
                 <button
