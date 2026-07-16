@@ -223,23 +223,36 @@ export default function DistributeClient() {
             <h3 className="text-lg font-bold text-[#1B3A5C] font-[Georgia]">Colaboradores</h3>
             <p className="text-sm text-[#64748B]">Comparte el acceso al proyecto con otros usuarios.</p>
 
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
               <input
                 type="email"
                 value={newCollabEmail}
                 onChange={e => setNewCollabEmail(e.target.value)}
                 placeholder="correo@ejemplo.com"
-                className="flex-1 min-w-0 rounded-lg border-[1.5px] border-[#E2E8F0] bg-white px-3 py-2.5 text-sm text-[#1A202C] outline-none transition-all focus:border-[#1B3A5C] focus:shadow-[0_0_0_3px_rgba(27,58,92,0.1)] placeholder:text-[#94A3B8]"
+                style={{
+                  flex: '1 1 0%',
+                  minWidth: 0,
+                  padding: '0.625rem 0.875rem',
+                  border: '1.5px solid #E2E8F0',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.875rem',
+                  background: '#fff',
+                  color: '#1A202C',
+                  outline: 'none',
+                }}
+                onFocus={e => { e.target.style.borderColor = '#1B3A5C'; e.target.style.boxShadow = '0 0 0 3px rgba(27,58,92,0.1)'; }}
+                onBlur={e => { e.target.style.borderColor = '#E2E8F0'; e.target.style.boxShadow = 'none'; }}
               />
               <select
                 value={newCollabRole}
                 onChange={e => setNewCollabRole(e.target.value as 'viewer' | 'editor')}
-                className="input-field w-32"
+                className="input-field"
+                style={{ width: '8rem', flexShrink: 0 }}
               >
                 <option value="viewer">Visor</option>
                 <option value="editor">Editor</option>
               </select>
-              <button onClick={addCollaborator} disabled={addingCollab} className="btn-primary flex-shrink-0">
+              <button onClick={addCollaborator} disabled={addingCollab} className="btn-primary" style={{ flexShrink: 0 }}>
                 <UserPlus size={16} /> Agregar
               </button>
             </div>
