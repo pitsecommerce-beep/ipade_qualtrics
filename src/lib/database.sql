@@ -198,6 +198,18 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- Lookup a user id by email (bypasses RLS for collaborator invites)
+CREATE OR REPLACE FUNCTION public.lookup_user_by_email(lookup_email TEXT)
+RETURNS TABLE(id UUID, email TEXT) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT p.id, p.email
+  FROM public.profiles p
+  WHERE lower(p.email) = lower(lookup_email)
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Auto-update updated_at on row modification
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
