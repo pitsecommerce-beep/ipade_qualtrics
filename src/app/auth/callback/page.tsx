@@ -5,21 +5,49 @@ import { supabase } from '@/lib/supabase';
 
 export default function AuthCallbackPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
         const hash = window.location.hash;
+        const searchParams = new URLSearchParams(window.location.search);
+
         if (hash) {
           const params = new URLSearchParams(hash.substring(1));
           const accessToken = params.get('access_token');
           const refreshToken = params.get('refresh_token');
           if (accessToken && refreshToken) {
-            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (error) throw error;
+            window.location.href = '/dashboard';
+            return;
           }
         }
+
+        const errorParam = searchParams.get('error');
+        if (errorParam) {
+          setErrorMessage(
+            searchParams.get('error_description') || 'Error de autenticación'
+          );
+          setStatus('error');
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
         setStatus('success');
-      } catch {
+      } catch (err) {
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Error de verificación'
+        );
         setStatus('error');
       }
     };
@@ -30,7 +58,10 @@ export default function AuthCallbackPage() {
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
-        <div className="animate-spin rounded-full h-10 w-10 border-3 border-[#1B3A5C] border-t-transparent" />
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-3 border-[#1B3A5C] border-t-transparent mx-auto mb-4" />
+          <p className="text-[#64748B] text-sm">Verificando autenticación...</p>
+        </div>
       </div>
     );
   }
@@ -46,7 +77,7 @@ export default function AuthCallbackPage() {
           </div>
           <h1 className="text-xl font-bold text-[#1B3A5C] font-[Georgia] mb-2">Error de verificación</h1>
           <p className="text-[#64748B] text-sm mb-6">
-            No pudimos verificar tu cuenta. El enlace puede haber expirado o ya fue utilizado.
+            {errorMessage || 'No pudimos verificar tu cuenta. El enlace puede haber expirado o ya fue utilizado.'}
           </p>
           <a
             href="/"
